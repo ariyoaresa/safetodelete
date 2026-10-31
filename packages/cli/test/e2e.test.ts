@@ -14,7 +14,7 @@ describe("SafeToDelete CLI End-to-End Simulation", () => {
       targets: [orphanPath],
       allowDirty: true,
       checkCommands: [
-        "node --test fixtures/sample-project/test/math.test.ts",
+        "node --experimental-strip-types --test fixtures/sample-project/test/math.test.ts",
       ],
     });
 
@@ -32,7 +32,7 @@ describe("SafeToDelete CLI End-to-End Simulation", () => {
       targets: [mathPath],
       allowDirty: true,
       checkCommands: [
-        "node --test fixtures/sample-project/test/math.test.ts",
+        "node --experimental-strip-types --test fixtures/sample-project/test/math.test.ts",
       ],
     });
 

@@ -1,6 +1,6 @@
 import test from "node:test";
 import assert from "node:assert";
-import { add, multiply } from "../src/utils/math.js";
+import { add, multiply } from "../src/utils/math.ts";
 
 test("math operations", () => {
   assert.strictEqual(add(2, 3), 5);

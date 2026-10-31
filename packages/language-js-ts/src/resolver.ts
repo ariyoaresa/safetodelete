@@ -31,10 +31,34 @@ const COMMON_EXTENSIONS = [
 export class ModuleResolver {
   private repoRoot: string;
   private aliasConfig?: PathAliasConfig;
+  private tsconfigCache: Map<string, PathAliasConfig | undefined> = new Map();
 
   constructor(repoRoot: string, aliasConfig?: PathAliasConfig) {
     this.repoRoot = path.resolve(repoRoot);
     this.aliasConfig = aliasConfig;
+  }
+
+  private getTsConfigForFile(absFromFile: string): PathAliasConfig | undefined {
+    let currentDir = path.dirname(absFromFile);
+    const root = path.resolve(this.repoRoot);
+
+    while (currentDir.startsWith(root) || currentDir === root) {
+      if (this.tsconfigCache.has(currentDir)) {
+        return this.tsconfigCache.get(currentDir);
+      }
+      const candidate = path.join(currentDir, "tsconfig.json");
+      if (fs.existsSync(candidate)) {
+        const loaded = ModuleResolver.loadTsConfig(currentDir);
+        if (loaded) {
+          this.tsconfigCache.set(currentDir, loaded);
+          return loaded;
+        }
+      }
+      const parent = path.dirname(currentDir);
+      if (parent === currentDir) break;
+      currentDir = parent;
+    }
+    return this.aliasConfig;
   }
 
   /**
@@ -77,6 +101,7 @@ export class ModuleResolver {
       : path.resolve(this.repoRoot, fromFilePath);
 
     const fromDir = path.dirname(absFromFile);
+    const activeAliasConfig = this.getTsConfigForFile(absFromFile);
 
     // 1. Relative imports: ./ or ../
     if (specifier.startsWith("./") || specifier.startsWith("../")) {
@@ -92,8 +117,8 @@ export class ModuleResolver {
     }
 
     // 2. TypeScript path aliases: e.g. "@/..." -> "src/..."
-    if (this.aliasConfig?.paths && this.aliasConfig.baseUrl) {
-      for (const [pattern, replacements] of Object.entries(this.aliasConfig.paths)) {
+    if (activeAliasConfig?.paths && activeAliasConfig.baseUrl) {
+      for (const [pattern, replacements] of Object.entries(activeAliasConfig.paths)) {
         const starIndex = pattern.indexOf("*");
         if (starIndex !== -1) {
           const prefix = pattern.slice(0, starIndex);
@@ -104,7 +129,7 @@ export class ModuleResolver {
 
             for (const replacement of replacements) {
               const targetPattern = replacement.replace("*", matched);
-              const targetBase = path.resolve(this.aliasConfig.baseUrl, targetPattern);
+              const targetBase = path.resolve(activeAliasConfig.baseUrl, targetPattern);
               const resolved = this.tryExtensions(targetBase);
               if (resolved) {
                 return {
@@ -116,7 +141,7 @@ export class ModuleResolver {
           }
         } else if (specifier === pattern) {
           for (const replacement of replacements) {
-            const targetBase = path.resolve(this.aliasConfig.baseUrl, replacement);
+            const targetBase = path.resolve(activeAliasConfig.baseUrl, replacement);
             const resolved = this.tryExtensions(targetBase);
             if (resolved) {
               return {
@@ -130,8 +155,8 @@ export class ModuleResolver {
     }
 
     // 3. Fallback: BaseUrl lookup
-    if (this.aliasConfig?.baseUrl) {
-      const targetBase = path.resolve(this.aliasConfig.baseUrl, specifier);
+    if (activeAliasConfig?.baseUrl) {
+      const targetBase = path.resolve(activeAliasConfig.baseUrl, specifier);
       const resolved = this.tryExtensions(targetBase);
       if (resolved) {
         return {
