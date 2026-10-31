@@ -1,0 +1,10 @@
+{
+  "name": "sample-project",
+  "version": "1.0.0",
+  "type": "module",
+  "main": "./dist/index.js",
+  "scripts": {
+    "test": "node --test"
+  }
+}
+

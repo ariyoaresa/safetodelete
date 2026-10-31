@@ -1,0 +1,22 @@
+{
+  "name": "@safetodelete/analyzer",
+  "version": "1.0.0",
+  "type": "module",
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "scripts": {
+    "build": "tsc",
+    "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {
+    "@safetodelete/dependency-graph": "*",
+    "@safetodelete/language-js-ts": "*",
+    "@safetodelete/report-schema": "*",
+    "@safetodelete/shared": "*"
+  },
+  "devDependencies": {
+    "@types/node": "^22.10.0",
+    "typescript": "^5.6.3"
+  }
+}
+

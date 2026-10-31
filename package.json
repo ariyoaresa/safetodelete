@@ -1,0 +1,21 @@
+{
+  "name": "safetodelete-monorepo",
+  "version": "1.0.0",
+  "private": true,
+  "description": "SafeToDelete: Evidence-based impact analysis and isolated deletion simulation",
+  "workspaces": [
+    "packages/*",
+    "apps/*"
+  ],
+  "scripts": {
+    "build": "npm run --workspaces --if-present build",
+    "test": "vitest run",
+    "typecheck": "npm run --workspaces --if-present typecheck"
+  },
+  "devDependencies": {
+    "@types/node": "^22.10.0",
+    "typescript": "^5.6.3",
+    "vitest": "^2.1.8"
+  }
+}
+

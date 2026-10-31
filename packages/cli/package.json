@@ -1,0 +1,29 @@
+{
+  "name": "@safetodelete/cli",
+  "version": "1.0.0",
+  "type": "module",
+  "bin": {
+    "safetodelete": "./dist/cli.js"
+  },
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "scripts": {
+    "build": "tsc",
+    "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {
+    "@safetodelete/analyzer": "*",
+    "@safetodelete/dependency-graph": "*",
+    "@safetodelete/report-schema": "*",
+    "@safetodelete/risk-engine": "*",
+    "@safetodelete/runner": "*",
+    "@safetodelete/shared": "*",
+    "@safetodelete/simulator": "*",
+    "commander": "^12.1.0"
+  },
+  "devDependencies": {
+    "@types/node": "^22.10.0",
+    "typescript": "^5.6.3"
+  }
+}
+

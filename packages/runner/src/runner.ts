@@ -1,0 +1,125 @@
+import { spawn } from "node:child_process";
+import type { CheckResult, CheckStatus } from "@safetodelete/report-schema";
+import { getSanitizedEnvironment, redactSecrets } from "@safetodelete/shared";
+
+export interface RunCommandOptions {
+  label: string;
+  command: string;
+  cwd: string;
+  timeoutMs?: number;
+  maxOutputBytes?: number;
+  extraEnv?: Record<string, string>;
+}
+
+export class SandboxRunner {
+  private defaultTimeoutMs: number;
+  private defaultMaxOutputBytes: number;
+
+  constructor(options?: { defaultTimeoutMs?: number; defaultMaxOutputBytes?: number }) {
+    this.defaultTimeoutMs = options?.defaultTimeoutMs ?? 60_000;
+    this.defaultMaxOutputBytes = options?.defaultMaxOutputBytes ?? 1_000_000; // 1 MB
+  }
+
+  public async executeCheck(options: RunCommandOptions): Promise<CheckResult> {
+    const timeoutMs = options.timeoutMs ?? this.defaultTimeoutMs;
+    const maxBytes = options.maxOutputBytes ?? this.defaultMaxOutputBytes;
+    const startTime = Date.now();
+
+    const env = {
+      ...getSanitizedEnvironment(),
+      ...(options.extraEnv || {}),
+    };
+
+    return new Promise<CheckResult>((resolve) => {
+      let isTimedOut = false;
+      let outputBuffer = "";
+      let outputTruncated = false;
+
+      const isWin = process.platform === "win32";
+
+      const child = spawn(options.command, {
+        cwd: options.cwd,
+        env,
+        shell: true,
+        stdio: ["ignore", "pipe", "pipe"],
+        windowsHide: true,
+      });
+
+      const appendOutput = (data: Buffer | string) => {
+        const text = data.toString();
+        if (outputBuffer.length < maxBytes) {
+          const remaining = maxBytes - outputBuffer.length;
+          outputBuffer += text.slice(0, remaining);
+          if (text.length > remaining) {
+            outputTruncated = true;
+          }
+        } else {
+          outputTruncated = true;
+        }
+      };
+
+      child.stdout?.on("data", appendOutput);
+      child.stderr?.on("data", appendOutput);
+
+      const timer = setTimeout(() => {
+        isTimedOut = true;
+        try {
+          if (isWin) {
+            // Force terminate process tree on Windows
+            spawn("taskkill", ["/pid", child.pid!.toString(), "/T", "/F"], {
+              stdio: "ignore",
+            });
+          } else {
+            child.kill("SIGKILL");
+          }
+        } catch {
+          // Ignore
+        }
+      }, timeoutMs);
+
+      child.on("error", (err) => {
+        clearTimeout(timer);
+        const durationMs = Date.now() - startTime;
+        resolve({
+          label: options.label,
+          command: options.command,
+          status: "ERROR",
+          durationMs,
+          logSummary: redactSecrets(
+            outputBuffer + `\nExecution Error: ${err.message}`
+          ),
+        });
+      });
+
+      child.on("close", (code) => {
+        clearTimeout(timer);
+        const durationMs = Date.now() - startTime;
+
+        let status: CheckStatus = "PASSED";
+        if (isTimedOut) {
+          status = "TIMED_OUT";
+        } else if (code !== 0) {
+          status = "FAILED";
+        }
+
+        let summary = redactSecrets(outputBuffer.trim());
+        if (outputTruncated) {
+          summary += `\n[NOTE: Output was truncated exceeding ${maxBytes} bytes limit]`;
+        }
+        if (isTimedOut) {
+          summary += `\n[NOTE: Process timed out exceeding limit of ${timeoutMs}ms]`;
+        }
+
+        resolve({
+          label: options.label,
+          command: options.command,
+          status,
+          exitCode: code ?? undefined,
+          durationMs,
+          logSummary: summary,
+        });
+      });
+    });
+  }
+}
+
