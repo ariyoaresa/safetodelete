@@ -1,0 +1,6 @@
+node_modules
+.safetodelete
+dist
+coverage
+.git
+.env*
