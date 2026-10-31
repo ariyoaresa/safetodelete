@@ -37,10 +37,11 @@ If you discover a security vulnerability or sandbox escape in SafeToDelete, plea
 
 Please report security vulnerabilities by emailing the maintainers directly or opening a GitHub Private Security Advisory:
 
-- **Email**: `security@safetodelete.local` (or maintainer contact)
+- **Email**: <a href="mailto:ariyoaresa89@gmail.com">ariyoaresa89@gmail.com</a>
 - **Response Time**: We acknowledge receipt of vulnerability reports within 48 hours and aim to provide a resolution timeline within 5 business days.
 
 Please provide:
 - A description of the vulnerability and its potential impact.
 - Step-by-step reproduction instructions or a minimal proof-of-concept repository.
 - Proposed mitigations, if known.
+

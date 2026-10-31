@@ -105,3 +105,4 @@ When opening a pull request:
 ## Security Vulnerabilities
 
 If you discover a security vulnerability (such as a sandbox escape, path traversal bug, or secret exposure issue), please do not open a public issue. See our [Security Policy](SECURITY.md) for confidential reporting procedures.
+

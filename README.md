@@ -204,3 +204,4 @@ We welcome contributions! Please read our [CONTRIBUTING.md](CONTRIBUTING.md) and
 ## License
 
 SafeToDelete is released under the [MIT License](LICENSE).
+
