@@ -18,7 +18,7 @@ program
   .description("Analyze repository dependencies and list candidates")
   .option("-r, --repo <path>", "Path to Git repository", ".")
   .option("--json", "Output raw JSON analysis")
-  .action((opts) => {
+  .action((opts: { repo: string; json?: boolean }) => {
     try {
       const repoPath = path.resolve(opts.repo);
       const analyzer = new Analyzer({ repoRoot: repoPath });
@@ -36,8 +36,8 @@ program
       console.log(`Diagnostics: ${result.diagnostics.length}\n`);
 
       const orphans = result.nodes
-        .filter((n) => n.kind === "file" && graph.isOrphan(n.id))
-        .map((n) => n.id);
+        .filter((n: { id: string; kind: string }) => n.kind === "file" && graph.isOrphan(n.id))
+        .map((n: { id: string }) => n.id);
 
       console.log(`Deletion Candidates (Files with 0 incoming static references) [${orphans.length}]:`);
       for (const orphan of orphans) {
@@ -60,7 +60,7 @@ program
   .option("--timeout <ms>", "Timeout in milliseconds for each check", "60000")
   .option("--json", "Output report as JSON")
   .option("-o, --out <file>", "Save report to a JSON file")
-  .action(async (targets, opts) => {
+  .action(async (targets: string[], opts: { repo: string; allowDirty?: boolean; check?: string[]; timeout: string; json?: boolean; out?: string }) => {
     try {
       const repoPath = path.resolve(opts.repo);
       const timeoutMs = parseInt(opts.timeout, 10);

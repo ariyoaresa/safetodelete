@@ -8,7 +8,7 @@ describe("SafeToDelete CLI End-to-End Simulation", () => {
   const orphanPath = "fixtures/sample-project/src/orphan.ts";
   const mathPath = "fixtures/sample-project/src/utils/math.ts";
 
-  it("simulates safe orphan deletion yielding LOW risk with working checkout unchanged", async () => {
+  it("simulates safe orphan deletion yielding MEDIUM risk due to non-literal dynamic import in repo", async () => {
     const report = await executeSimulation({
       repoRoot,
       targets: [orphanPath],
@@ -18,9 +18,11 @@ describe("SafeToDelete CLI End-to-End Simulation", () => {
       ],
     });
 
-    expect(report.riskCategory).toBe("LOW");
+    // PRD Principle: Cannot be classified as LOW when unresolvable dynamic imports exist
+    expect(report.riskCategory).toBe("MEDIUM");
     expect(report.dependantsFound.direct.length).toBe(0);
     expect(report.checks[0].status).toBe("PASSED");
+    expect(report.findings.some((f) => f.category === "DYNAMIC_IMPORT")).toBe(true);
 
     // Invariant: original file still exists!
     expect(fs.existsSync(path.join(repoRoot, orphanPath))).toBe(true);

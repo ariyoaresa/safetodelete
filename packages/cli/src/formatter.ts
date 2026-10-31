@@ -20,9 +20,9 @@ export function formatTerminalReport(report: SimulationReport): string {
     subDivider,
     `STATIC IMPACT:`,
     `  Direct dependants    : ${report.dependantsFound.direct.length}`,
-    ...report.dependantsFound.direct.map((d) => `    -> ${d}`),
+    ...report.dependantsFound.direct.map((d: string) => `    -> ${d}`),
     `  Transitive dependants: ${report.dependantsFound.transitive.length}`,
-    ...report.dependantsFound.transitive.map((t) => `    -> ${t}`),
+    ...report.dependantsFound.transitive.map((t: string) => `    -> ${t}`),
     subDivider,
     `VERIFICATION CHECKS:`,
   ];
