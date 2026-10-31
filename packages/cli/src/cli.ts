@@ -3,6 +3,13 @@ import { Command } from "commander";
 import path from "node:path";
 import fs from "node:fs";
 import { Analyzer } from "@safetodelete/analyzer";
+import {
+  RiskExplainer,
+  CodebaseAssistant,
+  CleanupAdvisor,
+  FailureInvestigator,
+  ImpactSummarizer,
+} from "@safetodelete/ai";
 import { executeSimulation } from "./engine.js";
 import { formatTerminalReport } from "./formatter.js";
 
@@ -58,9 +65,10 @@ program
   .option("--allow-dirty", "Allow running against committed HEAD even if working tree is dirty", false)
   .option("--check <commands...>", "Custom verification command(s) to execute in sandbox")
   .option("--timeout <ms>", "Timeout in milliseconds for each check", "60000")
+  .option("--ai", "Generate AI explanation and impact summary powered by Gemma 4", false)
   .option("--json", "Output report as JSON")
   .option("-o, --out <file>", "Save report to a JSON file")
-  .action(async (targets: string[], opts: { repo: string; allowDirty?: boolean; check?: string[]; timeout: string; json?: boolean; out?: string }) => {
+  .action(async (targets: string[], opts: { repo: string; allowDirty?: boolean; check?: string[]; timeout: string; json?: boolean; out?: string; ai?: boolean }) => {
     try {
       const repoPath = path.resolve(opts.repo);
       const timeoutMs = parseInt(opts.timeout, 10);
@@ -82,6 +90,21 @@ program
         console.log(JSON.stringify(report, null, 2));
       } else {
         console.log(formatTerminalReport(report));
+
+        if (opts.ai) {
+          console.log("\n" + "=".repeat(60));
+          console.log("  GEMMA 4 AI EXPLANATION & IMPACT ASSESSMENT");
+          console.log("=".repeat(60));
+          const explainer = new RiskExplainer();
+          const explanation = await explainer.explainReport(report);
+          console.log(explanation);
+          console.log();
+
+          const summarizer = new ImpactSummarizer();
+          const summary = await summarizer.summarizeImpact(report);
+          console.log(summary);
+          console.log("=".repeat(60) + "\n");
+        }
       }
 
       // Exit with non-zero code if risk is HIGH
@@ -90,6 +113,97 @@ program
       }
     } catch (err) {
       console.error(`Simulation Error: ${(err as Error).message}`);
+      process.exit(1);
+    }
+  });
+
+program
+  .command("ask <question>")
+  .description("Ask Gemma 4 questions about codebase dependencies and deletion impact")
+  .option("-r, --repo <path>", "Path to Git repository", ".")
+  .option("-f, --focus <file>", "Focus on a specific target file")
+  .action(async (question: string, opts: { repo: string; focus?: string }) => {
+    try {
+      const repoPath = path.resolve(opts.repo);
+      const analyzer = new Analyzer({ repoRoot: repoPath });
+      const { result, graph } = analyzer.analyze();
+
+      const assistant = new CodebaseAssistant();
+      console.log(`\nConsulting Gemma 4 on "${question}"...\n`);
+      const answer = await assistant.askQuestion(question, {
+        analysis: result,
+        graph,
+        focusPath: opts.focus,
+      });
+      console.log(answer + "\n");
+    } catch (err) {
+      console.error(`Error: ${(err as Error).message}`);
+      process.exit(1);
+    }
+  });
+
+program
+  .command("advise [targets...]")
+  .description("Get Gemma 4 cleanup and refactoring advice for safe, incremental deletions")
+  .option("-r, --repo <path>", "Path to Git repository", ".")
+  .action(async (targets: string[], opts: { repo: string }) => {
+    try {
+      const repoPath = path.resolve(opts.repo);
+      const analyzer = new Analyzer({ repoRoot: repoPath });
+      const { result, graph } = analyzer.analyze();
+
+      const advisor = new CleanupAdvisor();
+      console.log("\nGenerating Gemma 4 cleanup recommendations...\n");
+      const advice = await advisor.adviseCleanup({
+        analysis: result,
+        graph,
+        targetPaths: targets.length > 0 ? targets : undefined,
+      });
+      console.log(advice + "\n");
+    } catch (err) {
+      console.error(`Error: ${(err as Error).message}`);
+      process.exit(1);
+    }
+  });
+
+program
+  .command("investigate <reportFile>")
+  .description("Investigate check and test failures from a simulation report using Gemma 4")
+  .action(async (reportFile: string) => {
+    try {
+      const filePath = path.resolve(reportFile);
+      if (!fs.existsSync(filePath)) {
+        throw new Error(`Report file "${reportFile}" not found.`);
+      }
+
+      const report = JSON.parse(fs.readFileSync(filePath, "utf-8"));
+      const investigator = new FailureInvestigator();
+      console.log("\nInvestigating failure logs with Gemma 4...\n");
+      const investigation = await investigator.investigateFailures(report);
+      console.log(investigation + "\n");
+    } catch (err) {
+      console.error(`Error: ${(err as Error).message}`);
+      process.exit(1);
+    }
+  });
+
+program
+  .command("explain <reportFile>")
+  .description("Convert a saved simulation report into an AI technical explanation using Gemma 4")
+  .action(async (reportFile: string) => {
+    try {
+      const filePath = path.resolve(reportFile);
+      if (!fs.existsSync(filePath)) {
+        throw new Error(`Report file "${reportFile}" not found.`);
+      }
+
+      const report = JSON.parse(fs.readFileSync(filePath, "utf-8"));
+      const explainer = new RiskExplainer();
+      console.log("\nGenerating technical explanation with Gemma 4...\n");
+      const explanation = await explainer.explainReport(report);
+      console.log(explanation + "\n");
+    } catch (err) {
+      console.error(`Error: ${(err as Error).message}`);
       process.exit(1);
     }
   });

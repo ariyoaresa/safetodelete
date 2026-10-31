@@ -16,6 +16,7 @@ export default defineConfig({
       "@safetodelete/simulator": path.resolve(__dirname, "packages/simulator/src/index.ts"),
       "@safetodelete/runner": path.resolve(__dirname, "packages/runner/src/index.ts"),
       "@safetodelete/risk-engine": path.resolve(__dirname, "packages/risk-engine/src/index.ts"),
+      "@safetodelete/ai": path.resolve(__dirname, "packages/ai/src/index.ts"),
       "@safetodelete/cli": path.resolve(__dirname, "packages/cli/src/index.ts"),
     },
   },

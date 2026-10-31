@@ -12,6 +12,7 @@
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {
+    "@safetodelete/ai": "*",
     "@safetodelete/analyzer": "*",
     "@safetodelete/dependency-graph": "*",
     "@safetodelete/report-schema": "*",
