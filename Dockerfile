@@ -39,3 +39,4 @@ RUN npm link --workspace=@safetodelete/cli
 # Default command
 ENTRYPOINT ["safetodelete"]
 CMD ["--help"]
+
