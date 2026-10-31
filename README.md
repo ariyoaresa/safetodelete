@@ -32,6 +32,7 @@ Simple text search (`grep`), linters, and dead-code elimination algorithms canno
 - **Explain Uncertainty:** Clearly distinguish confirmed breakage, static references, observed test passes, and unverified possibilities.
 - **Deterministic Risk Rules:** No opaque AI scoring. Risk categories (`LOW`, `MEDIUM`, `HIGH`, `INCONCLUSIVE`) are derived deterministically from verifiable evidence.
 - **Secure by Default:** Untrusted repository scripts run in sanitized environments with strict timeouts, output buffer caps, and secret redaction.
+- **AI Explains Grounded Evidence (Gemma 4):** Deterministic tooling gathers facts, traces imports, and runs test suites; our dedicated **Gemma 4** AI layer synthesizes the findings, explains failures, and advises on safe refactorings without hallucinations.
 
 ---
 
@@ -42,6 +43,7 @@ SafeToDelete is architected as an extensible monorepo:
 ```text
 safetodelete/
 ├── packages/
+│   ├── ai/                # Gemma 4 AI layer (Risk Explainer, Assistant, Advisor, Investigator, Summarizer)
 │   ├── cli/               # The `safetodelete` CLI application
 │   ├── analyzer/          # Repository inventory, AST parsing, and diagnostics
 │   ├── language-js-ts/    # TypeScript Compiler API AST adapter and path alias resolver
@@ -106,7 +108,7 @@ Deletion Candidates (Files with 0 incoming static references) [2]:
   * src/unused-widget.tsx
 ```
 
-### 2. Simulate Isolated Deletion
+### 2. Simulate Isolated Deletion (with optional Gemma 4 AI Analysis)
 
 Test deleting one or more target files before merging your pull request:
 
@@ -114,11 +116,35 @@ Test deleting one or more target files before merging your pull request:
 safetodelete simulate src/legacy/old-util.ts
 ```
 
-With custom verification checks and dirty-tree bypass:
+With custom verification checks and Gemma 4 AI Explanation:
 
 ```bash
-safetodelete simulate src/legacy/old-util.ts --allow-dirty --check "npm test" "npm run build"
+safetodelete simulate src/legacy/old-util.ts --check "npm test" --ai
 ```
+
+### 3. Gemma 4 AI Layer Commands
+
+SafeToDelete includes dedicated AI capabilities powered by **Gemma 4**:
+
+- **Ask the Codebase Assistant**: Ask natural-language questions about dependencies and deletion impact:
+  ```bash
+  safetodelete ask "Why does billing depend on user-profile.ts?" -f src/user-profile.ts
+  ```
+
+- **Get Cleanup Advice**: Request actionable, incremental refactoring recommendations:
+  ```bash
+  safetodelete advise src/legacy/
+  ```
+
+- **Investigate Failures**: Explain compiler errors or test failures from a simulation report:
+  ```bash
+  safetodelete investigate report.json
+  ```
+
+- **Explain a Report**: Convert a simulation JSON report into an executive technical explanation:
+  ```bash
+  safetodelete explain report.json
+  ```
 
 Save report as JSON:
 
