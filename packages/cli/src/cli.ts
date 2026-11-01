@@ -13,6 +13,15 @@ import {
 import { executeSimulation } from "./engine.js";
 import { formatTerminalReport } from "./formatter.js";
 
+// Automatically load .env file if available in the current environment
+if (typeof (process as any).loadEnvFile === "function") {
+  try {
+    (process as any).loadEnvFile();
+  } catch {
+    // .env file is optional
+  }
+}
+
 const program = new Command();
 
 program
