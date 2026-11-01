@@ -31,6 +31,11 @@ describe("Shared Utilities & Security", () => {
     }).toThrow(/Security Violation.*escapes/);
   });
 
+  it("assertSafePathInside allows names that merely start with two dots", () => {
+    const baseDir = path.resolve("C:/my-repo/worktree");
+    expect(() => assertSafePathInside(baseDir, "..hidden.ts")).not.toThrow();
+  });
+
   it("assertSafePathInside throws on targeting .git", () => {
     const baseDir = path.resolve("C:/my-repo/worktree");
     expect(() => {

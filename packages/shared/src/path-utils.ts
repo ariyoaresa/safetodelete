@@ -32,7 +32,7 @@ export function assertSafePathInside(baseDir: string, relativeOrAbsolutePath: st
 
   const relative = path.relative(resolvedBase, resolvedTarget);
 
-  if (relative === "" || relative.startsWith("..") || path.isAbsolute(relative)) {
+  if (relative === "" || relative === ".." || relative.startsWith(`..${path.sep}`) || path.isAbsolute(relative)) {
     throw new Error(`Security Violation: Path "${relativeOrAbsolutePath}" escapes base directory "${baseDir}".`);
   }
 

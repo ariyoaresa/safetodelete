@@ -1,3 +1,5 @@
+const REQUEST_TIMEOUT_MS = 30_000;
+
 export interface GemmaClientConfig {
   model?: string;
   apiKey?: string;
@@ -37,6 +39,7 @@ export class Gemma4Client {
       try {
         const response = await fetch(this.endpoint, {
           method: "POST",
+          signal: AbortSignal.timeout(REQUEST_TIMEOUT_MS),
           headers: {
             "Content-Type": "application/json",
             ...(this.apiKey ? { Authorization: `Bearer ${this.apiKey}` } : {}),
@@ -64,10 +67,12 @@ export class Gemma4Client {
     // 2. If a Google API key is provided for Gemma 4 via Google AI
     if (this.apiKey) {
       try {
-        const url = `https://generativelanguage.googleapis.com/v1beta/models/${encodeURIComponent(this.model)}:generateContent?key=${this.apiKey}`;
+        // Send the key in a header so it never lands in URLs, proxy logs, or error traces.
+        const url = `https://generativelanguage.googleapis.com/v1beta/models/${encodeURIComponent(this.model)}:generateContent`;
         const response = await fetch(url, {
           method: "POST",
-          headers: { "Content-Type": "application/json" },
+          signal: AbortSignal.timeout(REQUEST_TIMEOUT_MS),
+          headers: { "Content-Type": "application/json", "x-goog-api-key": this.apiKey },
           body: JSON.stringify({
             contents: [{ parts: [{ text: prompt }] }],
             systemInstruction: systemInstruction ? { parts: [{ text: systemInstruction }] } : undefined,

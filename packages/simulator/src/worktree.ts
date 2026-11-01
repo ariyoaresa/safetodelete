@@ -1,7 +1,7 @@
 import fs from "node:fs";
 import path from "node:path";
 import crypto from "node:crypto";
-import { execSync } from "node:child_process";
+import { execFileSync } from "node:child_process";
 import { assertSafePathInside } from "@safetodelete/shared";
 
 export interface SimulationWorktreeOptions {
@@ -38,7 +38,7 @@ export class WorktreeManager {
     // 1. Verify Git status
     let isDirty = false;
     try {
-      const status = execSync("git status --porcelain", {
+      const status = execFileSync("git", ["status", "--porcelain"], {
         cwd: this.repoRoot,
         stdio: ["ignore", "pipe", "ignore"],
         encoding: "utf-8",
@@ -58,7 +58,7 @@ export class WorktreeManager {
     let resolvedSha = this.baseSha;
     if (!resolvedSha) {
       try {
-        resolvedSha = execSync("git rev-parse HEAD", {
+        resolvedSha = execFileSync("git", ["rev-parse", "HEAD"], {
           cwd: this.repoRoot,
           stdio: ["ignore", "pipe", "ignore"],
           encoding: "utf-8",
@@ -68,6 +68,10 @@ export class WorktreeManager {
       }
     }
 
+    if (resolvedSha.startsWith("-")) {
+      throw new Error(`Invalid base SHA "${resolvedSha}".`);
+    }
+
     // 3. Prepare unique worktree directory
     const id = `sim-${Date.now()}-${crypto.randomBytes(4).toString("hex")}`;
     fs.mkdirSync(this.worktreeParentDir, { recursive: true });
@@ -75,7 +79,7 @@ export class WorktreeManager {
 
     // 4. Create detached Git worktree
     try {
-      execSync(`git worktree add --detach "${worktreePath}" ${resolvedSha}`, {
+      execFileSync("git", ["worktree", "add", "--detach", worktreePath, resolvedSha], {
         cwd: this.repoRoot,
         stdio: ["ignore", "pipe", "pipe"],
       });
@@ -89,7 +93,7 @@ export class WorktreeManager {
       if (cleanedUp) return;
       cleanedUp = true;
       try {
-        execSync(`git worktree remove --force "${worktreePath}"`, {
+        execFileSync("git", ["worktree", "remove", "--force", worktreePath], {
           cwd: this.repoRoot,
           stdio: ["ignore", "pipe", "ignore"],
         });
@@ -98,7 +102,7 @@ export class WorktreeManager {
       }
 
       try {
-        execSync("git worktree prune", {
+        execFileSync("git", ["worktree", "prune"], {
           cwd: this.repoRoot,
           stdio: ["ignore", "pipe", "ignore"],
         });
@@ -117,9 +121,18 @@ export class WorktreeManager {
 
     // Register cleanup hooks for process exit
     const exitListener = () => cleanup();
+    // A signal listener suppresses Node's default termination, so exit explicitly.
+    const sigintListener = () => {
+      cleanup();
+      process.exit(130);
+    };
+    const sigtermListener = () => {
+      cleanup();
+      process.exit(143);
+    };
     process.once("exit", exitListener);
-    process.once("SIGINT", exitListener);
-    process.once("SIGTERM", exitListener);
+    process.once("SIGINT", sigintListener);
+    process.once("SIGTERM", sigtermListener);
 
     const applyDeletion = (targets: string[]): string[] => {
       const deletedPaths: string[] = [];
@@ -145,8 +158,8 @@ export class WorktreeManager {
       cleanup: () => {
         cleanup();
         process.removeListener("exit", exitListener);
-        process.removeListener("SIGINT", exitListener);
-        process.removeListener("SIGTERM", exitListener);
+        process.removeListener("SIGINT", sigintListener);
+        process.removeListener("SIGTERM", sigtermListener);
       },
     };
   }
