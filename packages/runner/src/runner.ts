@@ -9,24 +9,48 @@ export interface RunCommandOptions {
   timeoutMs?: number;
   maxOutputBytes?: number;
   extraEnv?: Record<string, string>;
+  allowHostExecution?: boolean;
 }
 
 export class SandboxRunner {
   private defaultTimeoutMs: number;
   private defaultMaxOutputBytes: number;
+  private allowHostExecution: boolean;
 
-  constructor(options?: { defaultTimeoutMs?: number; defaultMaxOutputBytes?: number }) {
+  constructor(options?: {
+    defaultTimeoutMs?: number;
+    defaultMaxOutputBytes?: number;
+    allowHostExecution?: boolean;
+  }) {
     this.defaultTimeoutMs = options?.defaultTimeoutMs ?? 60_000;
     this.defaultMaxOutputBytes = options?.defaultMaxOutputBytes ?? 1_000_000; // 1 MB
+    this.allowHostExecution = options?.allowHostExecution ?? true;
   }
 
   public async executeCheck(options: RunCommandOptions): Promise<CheckResult> {
+    const isAllowed = options.allowHostExecution ?? this.allowHostExecution;
+    if (!isAllowed) {
+      return {
+        label: options.label,
+        command: options.command,
+        status: "ERROR",
+        durationMs: 0,
+        logSummary:
+          "Security Policy Violation: Host-level execution of unverified commands requires explicit authorization (--allow-host-exec). Command blocked to prevent untrusted code execution on host.",
+      };
+    }
+
     const timeoutMs = options.timeoutMs ?? this.defaultTimeoutMs;
     const maxBytes = options.maxOutputBytes ?? this.defaultMaxOutputBytes;
     const startTime = Date.now();
 
     const env = {
       ...getSanitizedEnvironment(),
+      CI: "true",
+      CONTINUOUS_INTEGRATION: "true",
+      NON_INTERACTIVE: "true",
+      VITEST_MODE: "run",
+      JEST_WATCH: "0",
       ...(options.extraEnv || {}),
     };
 
@@ -131,4 +155,3 @@ export class SandboxRunner {
     });
   }
 }
-

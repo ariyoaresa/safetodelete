@@ -14,6 +14,7 @@ export interface SimulationExecutionOptions {
   baseSha?: string;
   checkCommands?: string[];
   timeoutMs?: number;
+  allowHostExec?: boolean;
 }
 
 export async function executeSimulation(options: SimulationExecutionOptions): Promise<SimulationReport> {
@@ -76,6 +77,7 @@ export async function executeSimulation(options: SimulationExecutionOptions): Pr
     // 4. Run Sandbox Checks
     const runner = new SandboxRunner({
       defaultTimeoutMs: options.timeoutMs ?? 60_000,
+      allowHostExecution: options.allowHostExec ?? true,
     });
 
     for (const cmd of commandsToRun) {
@@ -85,7 +87,6 @@ export async function executeSimulation(options: SimulationExecutionOptions): Pr
         cwd: handle.worktreePath,
       });
       checks.push(checkRes);
-      // Fail-fast if test fails? We collect all check results to provide complete evidence
     }
   } finally {
     // 5. Guaranteed cleanup of isolated worktree
@@ -104,4 +105,3 @@ export async function executeSimulation(options: SimulationExecutionOptions): Pr
 
   return report;
 }
-

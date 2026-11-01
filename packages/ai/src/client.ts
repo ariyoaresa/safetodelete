@@ -19,10 +19,19 @@ export class Gemma4Client {
   private temperature: number;
 
   constructor(config?: GemmaClientConfig) {
-    this.model = config?.model || process.env.GEMMA_MODEL || "gemma-4";
     this.apiKey = config?.apiKey || process.env.GEMMA_API_KEY || process.env.GEMINI_API_KEY;
     this.endpoint = config?.endpoint || process.env.GEMMA_ENDPOINT;
     this.temperature = config?.temperature ?? 0.2;
+
+    if (config?.model) {
+      this.model = config.model;
+    } else if (process.env.GEMMA_MODEL) {
+      this.model = process.env.GEMMA_MODEL;
+    } else if (this.apiKey && !this.endpoint) {
+      this.model = process.env.GEMINI_MODEL || "gemini-1.5-flash";
+    } else {
+      this.model = "gemma-4";
+    }
   }
 
   public getModelName(): string {
@@ -30,11 +39,12 @@ export class Gemma4Client {
   }
 
   /**
-   * Generates text using Gemma 4, falling back to a deterministic grounded mock
-   * when running in offline or test mode without network keys.
+   * Generates text using the configured AI endpoint or Google AI API.
+   * If no API key or endpoint is configured, operates in offline mode with deterministic synthesis.
+   * Throws explicit errors on network/API failure when credentials are provided.
    */
   public async generateText(prompt: string, systemInstruction?: string): Promise<GemmaResponse> {
-    // 1. If an explicit endpoint is provided (e.g., Ollama or custom Gemma 4 inference server)
+    // 1. If an explicit endpoint is provided (e.g., Ollama or custom inference server)
     if (this.endpoint) {
       try {
         const response = await fetch(this.endpoint, {
@@ -52,22 +62,25 @@ export class Gemma4Client {
           }),
         });
 
-        if (response.ok) {
-          const data = (await response.json()) as any;
-          const text = data.response || data.choices?.[0]?.message?.content || data.candidates?.[0]?.content?.parts?.[0]?.text;
-          if (text) {
-            return { content: text.trim(), model: this.model };
-          }
+        if (!response.ok) {
+          const errText = await response.text().catch(() => "");
+          throw new Error(`Inference endpoint returned HTTP ${response.status}: ${errText}`);
         }
-      } catch {
-        // Fallback to grounded offline synthesis if network is unavailable
+
+        const data = (await response.json()) as any;
+        const text = data.response || data.choices?.[0]?.message?.content || data.candidates?.[0]?.content?.parts?.[0]?.text;
+        if (!text) {
+          throw new Error("Inference endpoint returned an empty or unparseable response payload.");
+        }
+        return { content: text.trim(), model: this.model };
+      } catch (err) {
+        throw new Error(`AI Inference Error: ${(err as Error).message}`);
       }
     }
 
-    // 2. If a Google API key is provided for Gemma 4 via Google AI
+    // 2. If a Google API key is provided
     if (this.apiKey) {
       try {
-        // Send the key in a header so it never lands in URLs, proxy logs, or error traces.
         const url = `https://generativelanguage.googleapis.com/v1beta/models/${encodeURIComponent(this.model)}:generateContent`;
         const response = await fetch(url, {
           method: "POST",
@@ -80,19 +93,23 @@ export class Gemma4Client {
           }),
         });
 
-        if (response.ok) {
-          const data = (await response.json()) as any;
-          const text = data.candidates?.[0]?.content?.parts?.[0]?.text;
-          if (text) {
-            return { content: text.trim(), model: this.model };
-          }
+        if (!response.ok) {
+          const errText = await response.text().catch(() => "");
+          throw new Error(`Google AI API returned HTTP ${response.status}: ${errText}`);
         }
-      } catch {
-        // Fallback to grounded offline synthesis
+
+        const data = (await response.json()) as any;
+        const text = data.candidates?.[0]?.content?.parts?.[0]?.text;
+        if (!text) {
+          throw new Error("Google AI API returned no candidate text in response.");
+        }
+        return { content: text.trim(), model: this.model };
+      } catch (err) {
+        throw new Error(`AI API Error: ${(err as Error).message}`);
       }
     }
 
-    // 3. Grounded Deterministic Gemma 4 Mock Engine (for offline, CI, and test environments)
+    // 3. Grounded Deterministic Mock Engine (only for unauthenticated offline / local CI environments)
     return {
       content: this.generateGroundedMock(prompt, systemInstruction),
       model: `${this.model}-offline-engine`,
@@ -107,6 +124,7 @@ export class Gemma4Client {
 
     if (isExplainer) {
       return [
+        `[OFFLINE DETERMINISTIC SYNTHESIS]`,
         `### Gemma 4 — Risk Analysis & Explanation`,
         `- **Risk Assessment**: The proposed deletion was evaluated against static references and automated verification checks.`,
         `- **Key Factors**:`,
@@ -118,6 +136,7 @@ export class Gemma4Client {
 
     if (isInvestigator) {
       return [
+        `[OFFLINE DETERMINISTIC SYNTHESIS]`,
         `### Gemma 4 — Failure Investigation`,
         `- **Root Cause**: The simulated deletion removed symbols or modules that were directly imported by other active files.`,
         `- **Diagnosis**: Verification tests or build compilers failed because referenced files were missing at runtime/compile-time.`,
@@ -127,6 +146,7 @@ export class Gemma4Client {
 
     if (isAdvisor) {
       return [
+        `[OFFLINE DETERMINISTIC SYNTHESIS]`,
         `### Gemma 4 — Cleanup Advice & Safe Refactoring`,
         `1. **Break down the deletion**: Instead of removing the entire module at once, deprecate exports first.`,
         `2. **Decouple consumers**: Redirect callers to alternative implementations.`,
@@ -136,6 +156,7 @@ export class Gemma4Client {
 
     if (isImpact) {
       return [
+        `[OFFLINE DETERMINISTIC SYNTHESIS]`,
         `### Gemma 4 — Impact Summary`,
         `- **Blast Radius**: Changes affect direct importers and downstream transitive dependants.`,
         `- **Verification Coverage**: Automated checks were executed in an isolated detached worktree.`,
@@ -143,7 +164,6 @@ export class Gemma4Client {
       ].join("\n");
     }
 
-    return `Gemma 4 evaluated the codebase dependency graph: The requested elements have been mapped and analyzed against repository references.`;
+    return `[OFFLINE DETERMINISTIC SYNTHESIS] Gemma 4 evaluated the codebase dependency graph: The requested elements have been mapped and analyzed against repository references.`;
   }
 }
-

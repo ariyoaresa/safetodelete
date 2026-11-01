@@ -10,6 +10,13 @@ export interface ExtractedReference {
   column: number;
 }
 
+function getStringLiteralText(node?: ts.Node): string | undefined {
+  if (!node) return undefined;
+  if (ts.isStringLiteral(node)) return node.text;
+  if (ts.isNoSubstitutionTemplateLiteral(node)) return node.text;
+  return undefined;
+}
+
 export function parseJsTsReferences(filePath: string, sourceText: string): ExtractedReference[] {
   const sourceFile = ts.createSourceFile(
     filePath,
@@ -23,10 +30,11 @@ export function parseJsTsReferences(filePath: string, sourceText: string): Extra
   function visit(node: ts.Node) {
     // 1. Static Import: import ... from '...'
     if (ts.isImportDeclaration(node)) {
-      if (node.moduleSpecifier && ts.isStringLiteral(node.moduleSpecifier)) {
+      const text = getStringLiteralText(node.moduleSpecifier);
+      if (text !== undefined) {
         const { line, character } = sourceFile.getLineAndCharacterOfPosition(node.getStart());
         references.push({
-          rawSpecifier: node.moduleSpecifier.text,
+          rawSpecifier: text,
           kind: "imports",
           isDynamic: false,
           isLiteral: true,
@@ -37,10 +45,11 @@ export function parseJsTsReferences(filePath: string, sourceText: string): Extra
     }
     // 2. Export ... from '...'
     else if (ts.isExportDeclaration(node)) {
-      if (node.moduleSpecifier && ts.isStringLiteral(node.moduleSpecifier)) {
+      const text = getStringLiteralText(node.moduleSpecifier);
+      if (text !== undefined) {
         const { line, character } = sourceFile.getLineAndCharacterOfPosition(node.getStart());
         references.push({
-          rawSpecifier: node.moduleSpecifier.text,
+          rawSpecifier: text,
           kind: "reexports",
           isDynamic: false,
           isLiteral: true,
@@ -53,9 +62,10 @@ export function parseJsTsReferences(filePath: string, sourceText: string): Extra
     else if (ts.isCallExpression(node) && node.expression.kind === ts.SyntaxKind.ImportKeyword) {
       const arg = node.arguments[0];
       const { line, character } = sourceFile.getLineAndCharacterOfPosition(node.getStart());
-      if (arg && ts.isStringLiteral(arg)) {
+      const text = getStringLiteralText(arg);
+      if (text !== undefined) {
         references.push({
-          rawSpecifier: arg.text,
+          rawSpecifier: text,
           kind: "dynamic-import",
           isDynamic: true,
           isLiteral: true,
@@ -81,9 +91,10 @@ export function parseJsTsReferences(filePath: string, sourceText: string): Extra
     ) {
       const arg = node.arguments[0];
       const { line, character } = sourceFile.getLineAndCharacterOfPosition(node.getStart());
-      if (arg && ts.isStringLiteral(arg)) {
+      const text = getStringLiteralText(arg);
+      if (text !== undefined) {
         references.push({
-          rawSpecifier: arg.text,
+          rawSpecifier: text,
           kind: "imports",
           isDynamic: false,
           isLiteral: true,
@@ -108,4 +119,3 @@ export function parseJsTsReferences(filePath: string, sourceText: string): Extra
   visit(sourceFile);
   return references;
 }
-

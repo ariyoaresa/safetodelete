@@ -1,5 +1,6 @@
 import fs from "node:fs";
 import path from "node:path";
+import os from "node:os";
 import crypto from "node:crypto";
 import { execFileSync } from "node:child_process";
 import { assertSafePathInside } from "@safetodelete/shared";
@@ -31,7 +32,7 @@ export class WorktreeManager {
     this.allowDirty = !!options.allowDirty;
     this.worktreeParentDir = options.worktreeParentDir
       ? path.resolve(options.worktreeParentDir)
-      : path.join(this.repoRoot, ".safetodelete", "worktrees");
+      : path.join(os.tmpdir(), "safetodelete-worktrees");
   }
 
   public createWorktree(): WorktreeHandle {
@@ -87,11 +88,44 @@ export class WorktreeManager {
       throw new Error(`Failed to create Git worktree at "${worktreePath}": ${(err as Error).message}`);
     }
 
+    // 5. Virtualize dependencies: Link node_modules from repoRoot into worktree if present
+    const createdLinks: string[] = [];
+    const sourceNodeModules = path.join(this.repoRoot, "node_modules");
+    if (fs.existsSync(sourceNodeModules)) {
+      const destNodeModules = path.join(worktreePath, "node_modules");
+      if (!fs.existsSync(destNodeModules)) {
+        try {
+          const linkType = process.platform === "win32" ? "junction" : "dir";
+          fs.symlinkSync(sourceNodeModules, destNodeModules, linkType);
+          createdLinks.push(destNodeModules);
+        } catch {
+          // Fallback: Proceed without linking if permissions or cross-volume link fails
+        }
+      }
+    }
+
     let cleanedUp = false;
 
     const cleanup = () => {
       if (cleanedUp) return;
       cleanedUp = true;
+
+      // Safely unlink any created symlinks/junctions first so original files are never touched
+      for (const link of createdLinks) {
+        try {
+          const stat = fs.lstatSync(link);
+          if (stat.isSymbolicLink() || (process.platform === "win32" && stat.isDirectory())) {
+            try {
+              fs.unlinkSync(link);
+            } catch {
+              fs.rmdirSync(link);
+            }
+          }
+        } catch {
+          // Ignore
+        }
+      }
+
       try {
         execFileSync("git", ["worktree", "remove", "--force", worktreePath], {
           cwd: this.repoRoot,
@@ -119,21 +153,6 @@ export class WorktreeManager {
       }
     };
 
-    // Register cleanup hooks for process exit
-    const exitListener = () => cleanup();
-    // A signal listener suppresses Node's default termination, so exit explicitly.
-    const sigintListener = () => {
-      cleanup();
-      process.exit(130);
-    };
-    const sigtermListener = () => {
-      cleanup();
-      process.exit(143);
-    };
-    process.once("exit", exitListener);
-    process.once("SIGINT", sigintListener);
-    process.once("SIGTERM", sigtermListener);
-
     const applyDeletion = (targets: string[]): string[] => {
       const deletedPaths: string[] = [];
       for (const target of targets) {
@@ -155,13 +174,7 @@ export class WorktreeManager {
       worktreePath,
       baseSha: resolvedSha,
       applyDeletion,
-      cleanup: () => {
-        cleanup();
-        process.removeListener("exit", exitListener);
-        process.removeListener("SIGINT", sigintListener);
-        process.removeListener("SIGTERM", sigtermListener);
-      },
+      cleanup,
     };
   }
 }
-

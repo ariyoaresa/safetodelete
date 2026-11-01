@@ -1,3 +1,4 @@
+import path from "node:path";
 import type { SimulationReport } from "@safetodelete/report-schema";
 import { Gemma4Client } from "./client.js";
 
@@ -9,9 +10,11 @@ export class RiskExplainer {
   }
 
   public async explainReport(report: SimulationReport): Promise<string> {
+    const safeRepoName = path.basename(report.repository.rootPath) || "repository";
+
     const prompt = `
 SIMULATION REPORT:
-- Repository: ${report.repository.rootPath} (Commit: ${report.repository.commitSha})
+- Repository: ${safeRepoName} (Commit: ${report.repository.commitSha})
 - Targets: ${report.targets.join(", ")}
 - Risk Category: ${report.riskCategory}
 - Rationale: ${report.riskExplanation}
@@ -39,4 +42,3 @@ Please explain this risk report in clear, concise technical language for softwar
     return res.content;
   }
 }
-

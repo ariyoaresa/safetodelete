@@ -81,6 +81,37 @@ describe("RiskEvaluator", () => {
     expect(report.findings.some((f) => f.category === "MISSING_TESTS")).toBe(true);
   });
 
+  it("classifies risk as MEDIUM when unresolved imports exist", () => {
+    const graph = new DependencyGraph();
+    graph.addNode({ id: "src/orphan.ts", path: "src/orphan.ts", kind: "file" });
+
+    const evaluator = new RiskEvaluator();
+    const report = evaluator.evaluate({
+      repository: dummyRepo,
+      targets: ["src/orphan.ts"],
+      graph,
+      diagnostics: [
+        {
+          code: "UNRESOLVED_IMPORT",
+          message: "Cannot resolve import specifier '@/unknown'",
+          file: "src/other.ts",
+          severity: "WARNING",
+        },
+      ],
+      checks: [
+        {
+          label: "npm test",
+          command: "npm test",
+          status: "PASSED",
+          durationMs: 200,
+        },
+      ],
+    });
+
+    expect(report.riskCategory).toBe("MEDIUM");
+    expect(report.findings.some((f) => f.category === "UNRESOLVED_REFERENCE")).toBe(true);
+  });
+
   it("classifies risk as LOW when zero dependants and checks pass", () => {
     const graph = new DependencyGraph();
     graph.addNode({ id: "src/orphan.ts", path: "src/orphan.ts", kind: "file" });
@@ -128,4 +159,3 @@ describe("RiskEvaluator", () => {
     expect(report.riskCategory).toBe("INCONCLUSIVE");
   });
 });
-

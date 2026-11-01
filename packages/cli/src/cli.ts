@@ -63,12 +63,13 @@ program
   .argument("<targets...>", "Relative path(s) of files or folders to test deleting")
   .option("-r, --repo <path>", "Path to Git repository", ".")
   .option("--allow-dirty", "Allow running against committed HEAD even if working tree is dirty", false)
+  .option("--allow-host-exec", "Permit executing verification checks on host machine", true)
   .option("--check <commands...>", "Custom verification command(s) to execute in sandbox")
   .option("--timeout <ms>", "Timeout in milliseconds for each check", "60000")
   .option("--ai", "Generate AI explanation and impact summary powered by Gemma 4", false)
   .option("--json", "Output report as JSON")
   .option("-o, --out <file>", "Save report to a JSON file")
-  .action(async (targets: string[], opts: { repo: string; allowDirty?: boolean; check?: string[]; timeout: string; json?: boolean; out?: string; ai?: boolean }) => {
+  .action(async (targets: string[], opts: { repo: string; allowDirty?: boolean; allowHostExec?: boolean; check?: string[]; timeout: string; json?: boolean; out?: string; ai?: boolean }) => {
     try {
       const repoPath = path.resolve(opts.repo);
       const timeoutMs = parseInt(opts.timeout, 10);
@@ -77,6 +78,7 @@ program
         repoRoot: repoPath,
         targets,
         allowDirty: opts.allowDirty,
+        allowHostExec: opts.allowHostExec,
         checkCommands: opts.check,
         timeoutMs,
       });
@@ -209,4 +211,3 @@ program
   });
 
 program.parse(process.argv);
-

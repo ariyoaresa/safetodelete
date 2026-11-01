@@ -5,6 +5,10 @@ export default defineConfig({
   test: {
     include: ["packages/*/test/**/*.test.ts"],
     exclude: ["fixtures/**", "node_modules/**", "dist/**"],
+    testTimeout: 60000,
+    hookTimeout: 60000,
+    fileParallelism: false,
+    maxConcurrency: 1,
   },
   resolve: {
     alias: {

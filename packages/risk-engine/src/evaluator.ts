@@ -97,7 +97,21 @@ export class RiskEvaluator {
       });
     }
 
-    // 4. Evaluate Diagnostics (unresolved imports or dynamic non-literal imports)
+    // 4. Evaluate Diagnostics (unresolved imports and non-literal dynamic imports)
+    const unresolvedDiags = input.diagnostics.filter(
+      (d) => d.code === "UNRESOLVED_IMPORT"
+    );
+    if (unresolvedDiags.length > 0) {
+      findings.push({
+        id: `finding-unresolved-${Date.now()}`,
+        severity: "WARNING",
+        category: "UNRESOLVED_REFERENCE",
+        message: `Detected ${unresolvedDiags.length} unresolved import(s) in analyzed codebase.`,
+        evidence: unresolvedDiags.map((d) => `${d.file}:${d.line ?? 0} - ${d.message}`),
+        confidenceLabel: "POSSIBLE",
+      });
+    }
+
     const dynamicDiags = input.diagnostics.filter(
       (d) => d.code === "DYNAMIC_NON_LITERAL_IMPORT"
     );
@@ -126,11 +140,12 @@ export class RiskEvaluator {
       if (impact.direct.length > 0) reasons.push(`${impact.direct.length} active static dependant(s) remain`);
       if (hasFailedCheck) reasons.push("verification test/build failed after removal");
       riskExplanation = `High risk of regression: ${reasons.join(" and ")}.`;
-    } else if (dynamicDiags.length > 0 || input.checks.length === 0) {
+    } else if (dynamicDiags.length > 0 || unresolvedDiags.length > 0 || input.checks.length === 0) {
       riskCategory = "MEDIUM";
       const reasons: string[] = [];
       if (input.checks.length === 0) reasons.push("no automated verification tests were executed");
       if (dynamicDiags.length > 0) reasons.push("unresolved dynamic imports exist in the codebase");
+      if (unresolvedDiags.length > 0) reasons.push("unresolved import specifiers exist in the codebase");
       riskExplanation = `Medium risk / uncertainty: ${reasons.join(", ")}.`;
     } else if (hasPassedCheck && impact.direct.length === 0) {
       riskCategory = "LOW";
@@ -156,4 +171,3 @@ export class RiskEvaluator {
     };
   }
 }
-

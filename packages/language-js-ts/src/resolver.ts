@@ -32,10 +32,80 @@ export class ModuleResolver {
   private repoRoot: string;
   private aliasConfig?: PathAliasConfig;
   private tsconfigCache: Map<string, PathAliasConfig | undefined> = new Map();
+  private workspacePackages: Map<string, string> = new Map();
 
   constructor(repoRoot: string, aliasConfig?: PathAliasConfig) {
     this.repoRoot = path.resolve(repoRoot);
     this.aliasConfig = aliasConfig;
+    this.loadWorkspacePackages();
+  }
+
+  private loadWorkspacePackages(): void {
+    const rootPkgPath = path.join(this.repoRoot, "package.json");
+    if (!fs.existsSync(rootPkgPath)) return;
+
+    try {
+      const rootPkg = JSON.parse(fs.readFileSync(rootPkgPath, "utf-8"));
+      const workspaces: string[] = Array.isArray(rootPkg.workspaces)
+        ? rootPkg.workspaces
+        : Array.isArray(rootPkg.workspaces?.packages)
+        ? rootPkg.workspaces.packages
+        : [];
+
+      for (const pattern of workspaces) {
+        if (pattern.endsWith("/*")) {
+          const parentDir = path.join(this.repoRoot, pattern.slice(0, -2));
+          if (fs.existsSync(parentDir)) {
+            const entries = fs.readdirSync(parentDir, { withFileTypes: true });
+            for (const entry of entries) {
+              if (entry.isDirectory()) {
+                this.registerWorkspaceDir(path.join(parentDir, entry.name));
+              }
+            }
+          }
+        } else {
+          this.registerWorkspaceDir(path.join(this.repoRoot, pattern));
+        }
+      }
+    } catch {
+      // Ignore malformed package.json
+    }
+  }
+
+  private registerWorkspaceDir(pkgDir: string): void {
+    const pkgJsonPath = path.join(pkgDir, "package.json");
+    if (fs.existsSync(pkgJsonPath)) {
+      try {
+        const pkg = JSON.parse(fs.readFileSync(pkgJsonPath, "utf-8"));
+        if (pkg.name) {
+          const candidates = [
+            pkg.source,
+            pkg.main,
+            "src/index.ts",
+            "src/index.js",
+            "index.ts",
+            "index.js",
+          ].filter(Boolean);
+
+          let resolvedFile: string | undefined;
+          for (const cand of candidates) {
+            const full = path.resolve(pkgDir, cand);
+            const res = this.tryExtensions(full);
+            if (res) {
+              resolvedFile = res;
+              break;
+            }
+          }
+
+          if (resolvedFile) {
+            const rel = normalizePath(path.relative(this.repoRoot, resolvedFile));
+            this.workspacePackages.set(pkg.name, rel);
+          }
+        }
+      } catch {
+        // Ignore
+      }
+    }
   }
 
   private getTsConfigForFile(absFromFile: string): PathAliasConfig | undefined {
@@ -62,7 +132,8 @@ export class ModuleResolver {
   }
 
   /**
-   * Loads path aliases and baseUrl from tsconfig.json using TypeScript parser.
+   * Loads path aliases and baseUrl from tsconfig.json using TypeScript parser,
+   * properly resolving "extends" inheritance chains.
    */
   public static loadTsConfig(repoRoot: string): PathAliasConfig | undefined {
     const tsconfigPath = path.join(repoRoot, "tsconfig.json");
@@ -76,7 +147,14 @@ export class ModuleResolver {
         return undefined;
       }
 
-      const compilerOptions = configFile.config.compilerOptions || {};
+      // Use parseJsonConfigFileContent to follow "extends"
+      const parsedConfig = ts.parseJsonConfigFileContent(
+        configFile.config,
+        ts.sys,
+        path.dirname(tsconfigPath)
+      );
+
+      const compilerOptions = parsedConfig.options || {};
 
       let baseUrl: string | undefined = compilerOptions.baseUrl;
       if (baseUrl && !path.isAbsolute(baseUrl)) {
@@ -166,7 +244,30 @@ export class ModuleResolver {
       }
     }
 
-    // 4. External package (e.g., "react", "lodash", "@org/package")
+    // 4. Internal workspace packages in monorepos
+    if (this.workspacePackages.has(specifier)) {
+      return {
+        type: "file",
+        resolvedPath: this.workspacePackages.get(specifier),
+      };
+    }
+
+    for (const [pkgName, entryRel] of this.workspacePackages.entries()) {
+      if (specifier.startsWith(pkgName + "/")) {
+        const subpath = specifier.slice(pkgName.length + 1);
+        const pkgDir = path.dirname(path.resolve(this.repoRoot, entryRel));
+        const cand = path.resolve(pkgDir, subpath);
+        const res = this.tryExtensions(cand);
+        if (res) {
+          return {
+            type: "file",
+            resolvedPath: normalizePath(path.relative(this.repoRoot, res)),
+          };
+        }
+      }
+    }
+
+    // 5. External package (e.g., "react", "lodash", "@org/package")
     if (!specifier.startsWith("/") && !specifier.startsWith(".")) {
       const parts = specifier.split("/");
       const packageName = specifier.startsWith("@") && parts.length >= 2
@@ -201,7 +302,9 @@ export class ModuleResolver {
 
     // Try standard extension candidates
     for (const ext of COMMON_EXTENSIONS) {
-      const full = baseCandidate + ext;
+      const full = baseCandidate.endsWith("/") && ext.startsWith("/")
+        ? baseCandidate.slice(0, -1) + ext
+        : baseCandidate + ext;
       if (fs.existsSync(full) && fs.statSync(full).isFile()) {
         return full;
       }
@@ -210,4 +313,3 @@ export class ModuleResolver {
     return null;
   }
 }
-

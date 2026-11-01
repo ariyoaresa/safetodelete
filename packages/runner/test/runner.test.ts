@@ -15,6 +15,19 @@ describe("SandboxRunner", () => {
     expect(result.logSummary).toContain("runner is working");
   });
 
+  it("blocks execution when host execution is explicitly disabled", async () => {
+    const runner = new SandboxRunner({ allowHostExecution: false });
+    const result = await runner.executeCheck({
+      label: "untrusted script",
+      command: `node -e "console.log(\\"should not run\\")"`,
+      cwd: process.cwd(),
+    });
+
+    expect(result.status).toBe("ERROR");
+    expect(result.durationMs).toBe(0);
+    expect(result.logSummary).toContain("Security Policy Violation");
+  });
+
   it("captures failure exit code and output", async () => {
     const runner = new SandboxRunner();
     const result = await runner.executeCheck({
@@ -54,4 +67,3 @@ describe("SandboxRunner", () => {
     expect(result.logSummary).toContain("[REDACTED");
   });
 });
-

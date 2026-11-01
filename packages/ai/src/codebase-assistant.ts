@@ -1,3 +1,4 @@
+import path from "node:path";
 import type { AnalysisResult } from "@safetodelete/report-schema";
 import type { DependencyGraph } from "@safetodelete/dependency-graph";
 import { Gemma4Client } from "./client.js";
@@ -37,9 +38,11 @@ FOCUS MODULE: "${context.focusPath}"
 `;
     }
 
+    const safeRepoName = path.basename(context.analysis.repository.rootPath) || "repository";
+
     const prompt = `
 CODEBASE CONTEXT:
-- Repository: ${context.analysis.repository.rootPath}
+- Repository: ${safeRepoName}
 - Total Modules: ${totalNodes}
 - Total Dependency Edges: ${totalEdges}
 - Orphan Modules (0 incoming static references) [${orphans.length}]: ${orphans.slice(0, 15).join(", ")}${orphans.length > 15 ? "..." : ""}
@@ -60,4 +63,3 @@ Provide a direct, accurate answer using the dependency graph data. Cite specific
     return res.content;
   }
 }
-
