@@ -43,19 +43,24 @@ export class SandboxRunner {
         shell: true,
         stdio: ["ignore", "pipe", "pipe"],
         windowsHide: true,
+        // Own process group on POSIX so a timeout can kill grandchildren too.
+        detached: !isWin,
       });
 
+      let outputBytes = 0;
       const appendOutput = (data: Buffer | string) => {
-        const text = data.toString();
-        if (outputBuffer.length < maxBytes) {
-          const remaining = maxBytes - outputBuffer.length;
-          outputBuffer += text.slice(0, remaining);
-          if (text.length > remaining) {
-            outputTruncated = true;
-          }
-        } else {
+        const chunk = typeof data === "string" ? Buffer.from(data) : data;
+        const remaining = maxBytes - outputBytes;
+        if (remaining <= 0) {
+          outputTruncated = true;
+          return;
+        }
+        if (chunk.length > remaining) {
           outputTruncated = true;
         }
+        // Cap by bytes, not UTF-16 code units, so the limit is honest for multibyte output.
+        outputBuffer += chunk.subarray(0, remaining).toString();
+        outputBytes += Math.min(chunk.length, remaining);
       };
 
       child.stdout?.on("data", appendOutput);
@@ -70,7 +75,11 @@ export class SandboxRunner {
               stdio: "ignore",
             });
           } else {
-            child.kill("SIGKILL");
+            try {
+              process.kill(-child.pid!, "SIGKILL");
+            } catch {
+              child.kill("SIGKILL");
+            }
           }
         } catch {
           // Ignore
