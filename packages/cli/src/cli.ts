@@ -81,7 +81,8 @@ program
   .action(async (targets: string[], opts: { repo: string; allowDirty?: boolean; allowHostExec?: boolean; check?: string[]; timeout: string; json?: boolean; out?: string; ai?: boolean }) => {
     try {
       const repoPath = path.resolve(opts.repo);
-      const timeoutMs = parseInt(opts.timeout, 10);
+      const rawTimeout = parseInt(opts.timeout, 10);
+      const timeoutMs = Number.isFinite(rawTimeout) && rawTimeout > 0 ? rawTimeout : 60_000;
 
       const report = await executeSimulation({
         repoRoot: repoPath,
@@ -187,7 +188,18 @@ program
         throw new Error(`Report file "${reportFile}" not found.`);
       }
 
-      const report = JSON.parse(fs.readFileSync(filePath, "utf-8"));
+      const raw = fs.readFileSync(filePath, "utf-8");
+      let report: any;
+      try {
+        report = JSON.parse(raw);
+      } catch {
+        throw new Error(`Report file "${reportFile}" contains invalid JSON.`);
+      }
+
+      if (!report || !report.repository || !report.riskCategory) {
+        throw new Error(`Report file "${reportFile}" is not a valid SafeToDelete SimulationReport.`);
+      }
+
       const investigator = new FailureInvestigator();
       console.log("\nInvestigating failure logs with Gemma 4...\n");
       const investigation = await investigator.investigateFailures(report);
@@ -208,7 +220,18 @@ program
         throw new Error(`Report file "${reportFile}" not found.`);
       }
 
-      const report = JSON.parse(fs.readFileSync(filePath, "utf-8"));
+      const raw = fs.readFileSync(filePath, "utf-8");
+      let report: any;
+      try {
+        report = JSON.parse(raw);
+      } catch {
+        throw new Error(`Report file "${reportFile}" contains invalid JSON.`);
+      }
+
+      if (!report || !report.repository || !report.riskCategory) {
+        throw new Error(`Report file "${reportFile}" is not a valid SafeToDelete SimulationReport.`);
+      }
+
       const explainer = new RiskExplainer();
       console.log("\nGenerating technical explanation with Gemma 4...\n");
       const explanation = await explainer.explainReport(report);

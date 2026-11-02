@@ -1,0 +1,24 @@
+{
+  "extends": "./tsconfig.base.json",
+  "compilerOptions": {
+    "noEmit": true,
+    "baseUrl": ".",
+    "paths": {
+      "@safetodelete/report-schema": ["packages/report-schema/src/index.ts"],
+      "@safetodelete/shared": ["packages/shared/src/index.ts"],
+      "@safetodelete/language-js-ts": ["packages/language-js-ts/src/index.ts"],
+      "@safetodelete/dependency-graph": ["packages/dependency-graph/src/index.ts"],
+      "@safetodelete/analyzer": ["packages/analyzer/src/index.ts"],
+      "@safetodelete/simulator": ["packages/simulator/src/index.ts"],
+      "@safetodelete/runner": ["packages/runner/src/index.ts"],
+      "@safetodelete/risk-engine": ["packages/risk-engine/src/index.ts"],
+      "@safetodelete/ai": ["packages/ai/src/index.ts"],
+      "@safetodelete/cli": ["packages/cli/src/index.ts"]
+    }
+  },
+  "include": [
+    "packages/*/src/**/*",
+    "packages/*/test/**/*",
+    "vitest.config.ts"
+  ]
+}

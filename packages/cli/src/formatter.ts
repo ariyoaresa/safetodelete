@@ -35,7 +35,14 @@ export function formatTerminalReport(report: SimulationReport): string {
         `  [${check.status}] ${check.label} (code: ${check.exitCode ?? 0}, ${check.durationMs}ms)`
       );
       if (check.status !== "PASSED" && check.logSummary) {
-        lines.push(`    Summary: ${check.logSummary.split("\n")[0]}`);
+        const errorLines = check.logSummary
+          .split("\n")
+          .map((l) => l.trim())
+          .filter((l) => l.length > 0 && !l.startsWith(">"));
+
+        for (const line of errorLines.slice(0, 3)) {
+          lines.push(`    Summary: ${line}`);
+        }
       }
     }
   }
@@ -61,4 +68,3 @@ export function formatTerminalReport(report: SimulationReport): string {
 
   return lines.join("\n");
 }
-

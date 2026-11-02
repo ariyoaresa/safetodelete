@@ -55,15 +55,17 @@ export function discoverRepositoryFiles(repoRoot: string): DiscoveredFiles {
         const relPath = normalizePath(path.relative(rootAbs, fullPath));
         const ext = path.extname(entry.name);
 
-        if (SUPPORTED_EXTENSIONS.has(ext)) {
-          sourceFiles.push(relPath);
-        } else if (
+        if (
           entry.name === "package.json" ||
           entry.name.startsWith("tsconfig") ||
           entry.name.endsWith(".config.js") ||
-          entry.name.endsWith(".config.ts")
+          entry.name.endsWith(".config.ts") ||
+          entry.name.endsWith(".config.mjs") ||
+          entry.name.endsWith(".config.cjs")
         ) {
           configFiles.push(relPath);
+        } else if (SUPPORTED_EXTENSIONS.has(ext)) {
+          sourceFiles.push(relPath);
         }
       }
     }
@@ -75,4 +77,3 @@ export function discoverRepositoryFiles(repoRoot: string): DiscoveredFiles {
 
   return { sourceFiles, configFiles };
 }
-

@@ -10,7 +10,7 @@
   "scripts": {
     "build": "npm run --workspace=@safetodelete/report-schema build && npm run --workspace=@safetodelete/shared build && npm run --workspace=@safetodelete/language-js-ts build && npm run --workspace=@safetodelete/dependency-graph build && npm run --workspace=@safetodelete/simulator build && npm run --workspace=@safetodelete/runner build && npm run --workspace=@safetodelete/risk-engine build && npm run --workspace=@safetodelete/ai build && npm run --workspace=@safetodelete/analyzer build && npm run --workspace=@safetodelete/cli build",
     "test": "vitest run",
-    "typecheck": "npm run --workspaces --if-present typecheck"
+    "typecheck": "tsc --noEmit"
   },
   "devDependencies": {
     "@types/node": "^22.10.0",
@@ -18,4 +18,3 @@
     "vitest": "^2.1.8"
   }
 }
-

@@ -1,9 +1,8 @@
 /**
  * Common patterns of credentials, tokens, and secrets to scrub from output and logs.
  */
-const SECRET_PATTERNS: RegExp[] = [
+const TOKEN_PATTERNS: RegExp[] = [
   /bearer\s+[a-zA-Z0-9_\-\.=:_+/]{15,}/gi,
-  /(?:api[_\-]?key|access[_\-]?token|secret|password|passwd|auth[_\-]?token)\s*[:=]\s*["']?([a-zA-Z0-9_\-\.=:_+/]{8,})["']?/gi,
   /ghp_[a-zA-Z0-9]{36}/g,
   /gho_[a-zA-Z0-9]{36}/g,
   /github_pat_[a-zA-Z0-9_]{40,}/g,
@@ -12,20 +11,29 @@ const SECRET_PATTERNS: RegExp[] = [
   /npm_[a-zA-Z0-9]{36}/g,
 ];
 
+const KEY_VALUE_QUOTED =
+  /((?:api[_\-]?key|access[_\-]?token|secret|password|passwd|auth[_\-]?token)\s*[:=]\s*["'])([^"'\r\n]+)(["'])/gi;
+
+const KEY_VALUE_UNQUOTED =
+  /((?:api[_\-]?key|access[_\-]?token|secret|password|passwd|auth[_\-]?token)\s*[:=]\s*)([^\s"';,]+)/gi;
+
 /**
  * Redacts known sensitive patterns and credentials from command logs and reports.
  */
 export function redactSecrets(content: string): string {
   let redacted = content;
-  for (const pattern of SECRET_PATTERNS) {
-    redacted = redacted.replace(pattern, (match, ...args) => {
-      // If the regex has capture groups (like api_key="value"), replace the captured value
-      if (typeof args[0] === "string" && args[0].length > 0 && match.includes(args[0])) {
-        return match.replace(args[0], "[REDACTED]");
-      }
-      return "[REDACTED_SECRET]";
-    });
+
+  // 1. Redact quoted key-value pairs (e.g. password="...", api_key='...')
+  redacted = redacted.replace(KEY_VALUE_QUOTED, "$1[REDACTED]$3");
+
+  // 2. Redact unquoted key-value pairs (e.g. password=secret123)
+  redacted = redacted.replace(KEY_VALUE_UNQUOTED, "$1[REDACTED]");
+
+  // 3. Redact token patterns
+  for (const pattern of TOKEN_PATTERNS) {
+    redacted = redacted.replace(pattern, "[REDACTED_SECRET]");
   }
+
   return redacted;
 }
 
@@ -61,4 +69,3 @@ export function getSanitizedEnvironment(): NodeJS.ProcessEnv {
 
   return env;
 }
-

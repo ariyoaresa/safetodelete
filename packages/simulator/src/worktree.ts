@@ -16,8 +16,37 @@ export interface WorktreeHandle {
   id: string;
   worktreePath: string;
   baseSha: string;
+  nodeModulesLinked: boolean;
   applyDeletion: (targets: string[]) => string[];
   cleanup: () => void;
+}
+
+const activeCleanups = new Set<() => void>();
+let exitHandlersRegistered = false;
+
+function ensureExitHandlers(): void {
+  if (exitHandlersRegistered) return;
+  exitHandlersRegistered = true;
+
+  const runAllCleanups = () => {
+    for (const doCleanup of Array.from(activeCleanups)) {
+      try {
+        doCleanup();
+      } catch {
+        // Best-effort cleanup during termination
+      }
+    }
+  };
+
+  process.once("exit", runAllCleanups);
+  process.once("SIGINT", () => {
+    runAllCleanups();
+    process.exit(130);
+  });
+  process.once("SIGTERM", () => {
+    runAllCleanups();
+    process.exit(143);
+  });
 }
 
 export class WorktreeManager {
@@ -33,6 +62,8 @@ export class WorktreeManager {
     this.worktreeParentDir = options.worktreeParentDir
       ? path.resolve(options.worktreeParentDir)
       : path.join(os.tmpdir(), "safetodelete-worktrees");
+
+    ensureExitHandlers();
   }
 
   public createWorktree(): WorktreeHandle {
@@ -90,7 +121,9 @@ export class WorktreeManager {
 
     // 5. Virtualize dependencies: Link node_modules from repoRoot into worktree if present
     const createdLinks: string[] = [];
+    let nodeModulesLinked = false;
     const sourceNodeModules = path.join(this.repoRoot, "node_modules");
+
     if (fs.existsSync(sourceNodeModules)) {
       const destNodeModules = path.join(worktreePath, "node_modules");
       if (!fs.existsSync(destNodeModules)) {
@@ -98,10 +131,17 @@ export class WorktreeManager {
           const linkType = process.platform === "win32" ? "junction" : "dir";
           fs.symlinkSync(sourceNodeModules, destNodeModules, linkType);
           createdLinks.push(destNodeModules);
+          nodeModulesLinked = true;
         } catch {
-          // Fallback: Proceed without linking if permissions or cross-volume link fails
+          // If junction/symlink fails across drives or permissions
+          nodeModulesLinked = false;
         }
+      } else {
+        nodeModulesLinked = true;
       }
+    } else {
+      // No node_modules existed in root
+      nodeModulesLinked = true;
     }
 
     let cleanedUp = false;
@@ -109,6 +149,7 @@ export class WorktreeManager {
     const cleanup = () => {
       if (cleanedUp) return;
       cleanedUp = true;
+      activeCleanups.delete(cleanup);
 
       // Safely unlink any created symlinks/junctions first so original files are never touched
       for (const link of createdLinks) {
@@ -153,11 +194,17 @@ export class WorktreeManager {
       }
     };
 
+    activeCleanups.add(cleanup);
+
     const applyDeletion = (targets: string[]): string[] => {
       const deletedPaths: string[] = [];
       for (const target of targets) {
+        const resolvedTarget = path.isAbsolute(target)
+          ? path.relative(this.repoRoot, target)
+          : target;
+
         // Validate target path is strictly inside worktree and does not escape or target .git
-        const safeTarget = assertSafePathInside(worktreePath, target);
+        const safeTarget = assertSafePathInside(worktreePath, resolvedTarget);
 
         if (fs.existsSync(safeTarget)) {
           fs.rmSync(safeTarget, { recursive: true, force: true });
@@ -173,6 +220,7 @@ export class WorktreeManager {
       id,
       worktreePath,
       baseSha: resolvedSha,
+      nodeModulesLinked,
       applyDeletion,
       cleanup,
     };

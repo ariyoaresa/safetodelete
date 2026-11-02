@@ -23,6 +23,11 @@ brief
 
 ## 2. Recommended stack
 
+> **Implementation Status Note:**  
+> **Phase 1 (Current):** Delivers the local-first CLI and core modular libraries under `packages/*` (`@safetodelete/cli`, `@safetodelete/analyzer`, `@safetodelete/language-js-ts`, `@safetodelete/dependency-graph`, `@safetodelete/simulator`, `@safetodelete/runner`, `@safetodelete/risk-engine`, `@safetodelete/report-schema`, `@safetodelete/ai`, and `@safetodelete/shared`).  
+> **Phase 2 (Roadmap):** Hosted multi-tenant Web dashboard (Next.js), persistent API backend (Fastify/NestJS), database persistence (PostgreSQL + Prisma), and async queue workers (Redis + BullMQ).
+
+
   -----------------------------------------------------------------------
   Area                    Recommendation          Notes
   ----------------------- ----------------------- -----------------------

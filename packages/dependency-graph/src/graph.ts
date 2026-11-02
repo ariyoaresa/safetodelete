@@ -31,7 +31,11 @@ export class DependencyGraph {
       this.addNode({ id: edge.from, path: edge.from, kind: "file" });
     }
     if (!this.nodes.has(edge.to)) {
-      const isPkg = !edge.to.includes("/") && !edge.to.includes(".");
+      const isPkg =
+        edge.kind === "package-dependency" ||
+        (edge.to.startsWith("@")
+          ? edge.to.split("/").length <= 2
+          : !edge.to.includes("/") && !edge.to.includes("."));
       this.addNode({ id: edge.to, path: edge.to, kind: isPkg ? "package" : "file" });
     }
 
@@ -62,13 +66,36 @@ export class DependencyGraph {
   }
 
   /**
+   * Expands target IDs, resolving any directory prefixes into the individual file nodes they contain.
+   */
+  public expandTargets(targetIds: string[]): string[] {
+    const expanded = new Set<string>();
+    const allNodeIds = Array.from(this.nodes.keys());
+
+    for (const target of targetIds) {
+      if (this.nodes.has(target)) {
+        expanded.add(target);
+      }
+      const prefix = target.endsWith("/") ? target : `${target}/`;
+      for (const nodeId of allNodeIds) {
+        if (nodeId.startsWith(prefix)) {
+          expanded.add(nodeId);
+        }
+      }
+    }
+
+    return Array.from(expanded);
+  }
+
+  /**
    * Finds direct dependants for one or more target node IDs (nodes that directly import the targets).
    */
   public getDirectDependants(targetIds: string[]): string[] {
+    const resolvedTargets = this.expandTargets(targetIds);
     const direct = new Set<string>();
-    const targetSet = new Set(targetIds);
+    const targetSet = new Set(resolvedTargets);
 
-    for (const id of targetIds) {
+    for (const id of resolvedTargets) {
       const incoming = this.incomingEdges.get(id) || [];
       for (const edge of incoming) {
         if (!targetSet.has(edge.from)) {
@@ -85,9 +112,10 @@ export class DependencyGraph {
    * Traverses reverse edges (incoming) using BFS with cycle detection.
    */
   public getImpactSummary(targetIds: string[]): DependantsSummary {
-    const directSet = new Set<string>(this.getDirectDependants(targetIds));
-    const targetSet = new Set<string>(targetIds);
-    const visited = new Set<string>([...targetIds]);
+    const resolvedTargets = this.expandTargets(targetIds);
+    const directSet = new Set<string>(this.getDirectDependants(resolvedTargets));
+    const targetSet = new Set(resolvedTargets);
+    const visited = new Set<string>([...resolvedTargets]);
     const queue: string[] = [...directSet];
 
     for (const d of directSet) {
@@ -125,4 +153,3 @@ export class DependencyGraph {
     return incoming.length === 0;
   }
 }
-

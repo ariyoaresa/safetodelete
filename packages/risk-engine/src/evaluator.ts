@@ -1,3 +1,4 @@
+import crypto from "node:crypto";
 import type {
   CheckResult,
   Diagnostic,
@@ -16,6 +17,11 @@ export interface EvaluationInput {
   checks: CheckResult[];
 }
 
+function generateDeterministicId(prefix: string, seed: string): string {
+  const hash = crypto.createHash("sha256").update(seed).digest("hex").slice(0, 8);
+  return `${prefix}-${hash}`;
+}
+
 export class RiskEvaluator {
   public evaluate(input: EvaluationInput): SimulationReport {
     const findings: Finding[] = [];
@@ -30,7 +36,7 @@ export class RiskEvaluator {
     // 1. Evaluate Direct Static Dependants
     if (impact.direct.length > 0) {
       findings.push({
-        id: `finding-static-${Date.now()}`,
+        id: generateDeterministicId("finding-static", `${input.targets.join(",")}:${impact.direct.join(",")}`),
         severity: "ERROR",
         category: "STATIC_DEPENDENCY",
         message: `Deletion candidate has ${impact.direct.length} active static dependant(s) in the codebase.`,
@@ -40,12 +46,13 @@ export class RiskEvaluator {
     }
 
     // 2. Evaluate Config References
-    for (const target of input.targets) {
+    const resolvedTargets = input.graph.expandTargets ? input.graph.expandTargets(input.targets) : input.targets;
+    for (const target of resolvedTargets) {
       const incoming = input.graph.getIncomingEdges(target);
       const configRefs = incoming.filter((e) => e.kind === "config-reference");
       if (configRefs.length > 0) {
         findings.push({
-          id: `finding-config-${Date.now()}-${target}`,
+          id: generateDeterministicId("finding-config", `${target}:${configRefs.map((e) => e.from).join(",")}`),
           severity: "ERROR",
           category: "CONFIG_REFERENCE",
           message: `Target "${target}" is referenced by project configuration (${configRefs.map((e) => e.from).join(", ")}).`,
@@ -61,12 +68,14 @@ export class RiskEvaluator {
     let hasPassedCheck = false;
 
     for (const check of input.checks) {
+      const sanitizedLabel = check.label.replace(/[^a-zA-Z0-9_-]/g, "_");
       if (check.status === "FAILED") {
         hasFailedCheck = true;
+        const isBuild = check.label.toLowerCase().includes("build") || check.label.toLowerCase().includes("compile");
         findings.push({
-          id: `finding-check-failed-${check.label}`,
+          id: generateDeterministicId("finding-check-failed", `${sanitizedLabel}:${check.exitCode}`),
           severity: "ERROR",
-          category: check.label.toLowerCase().includes("build") ? "BUILD_FAILURE" : "TEST_FAILURE",
+          category: isBuild ? "BUILD_FAILURE" : "TEST_FAILURE",
           message: `Check "${check.label}" failed after deletion simulation with exit code ${check.exitCode ?? 1}.`,
           evidence: [check.logSummary || "No log summary available"],
           confidenceLabel: "OBSERVED",
@@ -74,7 +83,7 @@ export class RiskEvaluator {
       } else if (check.status === "TIMED_OUT" || check.status === "ERROR") {
         hasTimeoutOrError = true;
         findings.push({
-          id: `finding-check-error-${check.label}`,
+          id: generateDeterministicId("finding-check-error", sanitizedLabel),
           severity: "WARNING",
           category: "TEST_FAILURE",
           message: `Check "${check.label}" encountered an execution error or timed out.`,
@@ -88,7 +97,7 @@ export class RiskEvaluator {
 
     if (input.checks.length === 0) {
       findings.push({
-        id: `finding-missing-tests-${Date.now()}`,
+        id: generateDeterministicId("finding-missing-tests", input.targets.join(",")),
         severity: "WARNING",
         category: "MISSING_TESTS",
         message: "No verification commands (tests or build) were configured or executed.",
@@ -103,7 +112,7 @@ export class RiskEvaluator {
     );
     if (unresolvedDiags.length > 0) {
       findings.push({
-        id: `finding-unresolved-${Date.now()}`,
+        id: generateDeterministicId("finding-unresolved", unresolvedDiags.map((d) => d.file).join(",")),
         severity: "WARNING",
         category: "UNRESOLVED_REFERENCE",
         message: `Detected ${unresolvedDiags.length} unresolved import(s) in analyzed codebase.`,
@@ -117,7 +126,7 @@ export class RiskEvaluator {
     );
     if (dynamicDiags.length > 0) {
       findings.push({
-        id: `finding-dynamic-${Date.now()}`,
+        id: generateDeterministicId("finding-dynamic", dynamicDiags.map((d) => d.file).join(",")),
         severity: "WARNING",
         category: "DYNAMIC_IMPORT",
         message: `Detected ${dynamicDiags.length} non-literal dynamic import(s) that cannot be statically mapped.`,
@@ -156,8 +165,13 @@ export class RiskEvaluator {
       riskExplanation = "Medium risk: Incomplete evidence available to classify as low risk.";
     }
 
+    const reportId = generateDeterministicId(
+      "report",
+      `${input.repository.commitSha}:${input.targets.join(",")}:${riskCategory}`
+    );
+
     return {
-      id: `report-${Date.now()}`,
+      id: reportId,
       version: "1.0.0",
       createdAt: new Date().toISOString(),
       repository: input.repository,

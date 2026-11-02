@@ -27,8 +27,8 @@ export class Gemma4Client {
       this.model = config.model;
     } else if (process.env.GEMMA_MODEL) {
       this.model = process.env.GEMMA_MODEL;
-    } else if (this.apiKey && !this.endpoint) {
-      this.model = process.env.GEMINI_MODEL || "gemini-1.5-flash";
+    } else if (this.apiKey && !this.endpoint && process.env.GEMINI_MODEL) {
+      this.model = process.env.GEMINI_MODEL;
     } else {
       this.model = "gemma-4";
     }
@@ -117,34 +117,9 @@ export class Gemma4Client {
   }
 
   private generateGroundedMock(prompt: string, system?: string): string {
-    const isExplainer = prompt.includes("SIMULATION REPORT") || system?.includes("Risk Explainer");
-    const isInvestigator = prompt.includes("FAILED CHECKS") || system?.includes("Failure Investigator");
-    const isAdvisor = prompt.includes("CLEANUP") || system?.includes("Advisor");
-    const isImpact = prompt.includes("IMPACT") || system?.includes("Impact Summarizer");
+    const sys = system || "";
 
-    if (isExplainer) {
-      return [
-        `[OFFLINE DETERMINISTIC SYNTHESIS]`,
-        `### Gemma 4 — Risk Analysis & Explanation`,
-        `- **Risk Assessment**: The proposed deletion was evaluated against static references and automated verification checks.`,
-        `- **Key Factors**:`,
-        `  * Breakage was verified in an isolated Git worktree without altering the base working branch.`,
-        `  * Active dependants and test execution results determined the overall risk classification.`,
-        `- **Guidance**: Review affected call sites before proceeding with manual deletion.`,
-      ].join("\n");
-    }
-
-    if (isInvestigator) {
-      return [
-        `[OFFLINE DETERMINISTIC SYNTHESIS]`,
-        `### Gemma 4 — Failure Investigation`,
-        `- **Root Cause**: The simulated deletion removed symbols or modules that were directly imported by other active files.`,
-        `- **Diagnosis**: Verification tests or build compilers failed because referenced files were missing at runtime/compile-time.`,
-        `- **Resolution**: Refactor the calling modules to decouple their imports before deleting this target.`,
-      ].join("\n");
-    }
-
-    if (isAdvisor) {
+    if (sys.includes("Advisor") || prompt.includes("CLEANUP ADVICE")) {
       return [
         `[OFFLINE DETERMINISTIC SYNTHESIS]`,
         `### Gemma 4 — Cleanup Advice & Safe Refactoring`,
@@ -154,13 +129,35 @@ export class Gemma4Client {
       ].join("\n");
     }
 
-    if (isImpact) {
+    if (sys.includes("Impact") || prompt.includes("SIMULATION IMPACT")) {
       return [
         `[OFFLINE DETERMINISTIC SYNTHESIS]`,
         `### Gemma 4 — Impact Summary`,
         `- **Blast Radius**: Changes affect direct importers and downstream transitive dependants.`,
         `- **Verification Coverage**: Automated checks were executed in an isolated detached worktree.`,
         `- **Recommendation**: Ensure integration tests cover downstream consumer modules before merging.`,
+      ].join("\n");
+    }
+
+    if (sys.includes("Investigator") || prompt.includes("FAILED CHECKS")) {
+      return [
+        `[OFFLINE DETERMINISTIC SYNTHESIS]`,
+        `### Gemma 4 — Failure Investigation`,
+        `- **Root Cause**: The simulated deletion removed symbols or modules that were directly imported by other active files.`,
+        `- **Diagnosis**: Verification tests or build compilers failed because referenced files were missing at runtime/compile-time.`,
+        `- **Resolution**: Refactor the calling modules to decouple their imports before deleting this target.`,
+      ].join("\n");
+    }
+
+    if (sys.includes("Explainer") || prompt.includes("SIMULATION REPORT")) {
+      return [
+        `[OFFLINE DETERMINISTIC SYNTHESIS]`,
+        `### Gemma 4 — Risk Analysis & Explanation`,
+        `- **Risk Assessment**: The proposed deletion was evaluated against static references and automated verification checks.`,
+        `- **Key Factors**:`,
+        `  * Breakage was verified in an isolated Git worktree without altering the base working branch.`,
+        `  * Active dependants and test execution results determined the overall risk classification.`,
+        `- **Guidance**: Review affected call sites before proceeding with manual deletion.`,
       ].join("\n");
     }
 

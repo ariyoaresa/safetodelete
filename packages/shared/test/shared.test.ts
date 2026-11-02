@@ -53,12 +53,13 @@ describe("Shared Utilities & Security", () => {
     expect(valid).toBe(path.join(baseDir, "src/components/button.tsx"));
   });
 
-  it("redacts secret tokens, bearer auth, and private keys", () => {
+  it("redacts secret tokens, bearer auth, and private keys including special characters", () => {
     const sample = `
       Error occurred with authorization Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.xyz
       GitHub token: ghp_123456789012345678901234567890123456
       AWS: AKIAIOSFODNN7EXAMPLE
       Config: api_key="super_secret_api_key_12345"
+      Password: password="P@ssw0rd!#$Complex"
     `;
 
     const cleaned = redactSecrets(sample);
@@ -66,6 +67,7 @@ describe("Shared Utilities & Security", () => {
     expect(cleaned).not.toContain("ghp_123456789012345678901234567890123456");
     expect(cleaned).not.toContain("AKIAIOSFODNN7EXAMPLE");
     expect(cleaned).not.toContain("super_secret_api_key_12345");
+    expect(cleaned).not.toContain("P@ssw0rd!#$Complex");
     expect(cleaned).toContain("[REDACTED");
   });
 
@@ -79,4 +81,3 @@ describe("Shared Utilities & Security", () => {
     expect(env.CI).toBe("true");
   });
 });
-

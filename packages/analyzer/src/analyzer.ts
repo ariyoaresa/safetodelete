@@ -1,5 +1,6 @@
 import fs from "node:fs";
 import path from "node:path";
+import crypto from "node:crypto";
 import { execSync } from "node:child_process";
 import type {
   AnalysisResult,
@@ -109,8 +110,15 @@ export class Analyzer {
     const tsconfig = ModuleResolver.loadTsConfig(this.repoRoot);
     const resolver = new ModuleResolver(this.repoRoot, tsconfig);
 
-    // Parse each source file and extract edges
-    for (const relFile of sourceFiles) {
+    // Parse all source files and code-based config files
+    const allCodeFiles = [
+      ...sourceFiles,
+      ...configFiles.filter((c) =>
+        c.endsWith(".ts") || c.endsWith(".js") || c.endsWith(".mjs") || c.endsWith(".cjs")
+      ),
+    ];
+
+    for (const relFile of allCodeFiles) {
       const fullPath = path.join(this.repoRoot, relFile);
       let content = "";
       try {
@@ -205,8 +213,14 @@ export class Analyzer {
       }
     }
 
+    const deterministicId = `analysis-${crypto
+      .createHash("sha256")
+      .update(`${commitSha}:${sourceFiles.length}:${graph.getAllEdges().length}`)
+      .digest("hex")
+      .slice(0, 12)}`;
+
     const result: AnalysisResult = {
-      id: `analysis-${Date.now()}`,
+      id: deterministicId,
       repository: snapshot,
       nodes: graph.getAllNodes(),
       edges: graph.getAllEdges(),
@@ -217,4 +231,3 @@ export class Analyzer {
     return { result, graph };
   }
 }
-

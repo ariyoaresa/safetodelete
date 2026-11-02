@@ -48,6 +48,16 @@ export async function executeSimulation(options: SimulationExecutionOptions): Pr
   const handle = worktreeManager.createWorktree();
   const checks: CheckResult[] = [];
 
+  if (!handle.nodeModulesLinked && fs.existsSync(path.join(repoRoot, "node_modules"))) {
+    analysisResult.diagnostics.push({
+      code: "DEPENDENCY_LINK_WARNING",
+      message:
+        "Failed to link node_modules into isolated simulation worktree. Verification checks may fail if external dependencies are required.",
+      file: "package.json",
+      severity: "WARNING",
+    });
+  }
+
   try {
     // Apply deletion inside isolated worktree
     handle.applyDeletion(relTargets);

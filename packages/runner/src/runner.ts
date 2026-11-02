@@ -28,6 +28,16 @@ export class SandboxRunner {
   }
 
   public async executeCheck(options: RunCommandOptions): Promise<CheckResult> {
+    if (!options.command || typeof options.command !== "string" || options.command.trim().length === 0) {
+      return {
+        label: options.label || "empty-command",
+        command: options.command || "",
+        status: "ERROR",
+        durationMs: 0,
+        logSummary: "Invalid command: Command string must be a non-empty string.",
+      };
+    }
+
     const isAllowed = options.allowHostExecution ?? this.allowHostExecution;
     if (!isAllowed) {
       return {
@@ -40,7 +50,8 @@ export class SandboxRunner {
       };
     }
 
-    const timeoutMs = options.timeoutMs ?? this.defaultTimeoutMs;
+    const rawTimeout = options.timeoutMs ?? this.defaultTimeoutMs;
+    const timeoutMs = Number.isFinite(rawTimeout) && rawTimeout > 0 ? rawTimeout : this.defaultTimeoutMs;
     const maxBytes = options.maxOutputBytes ?? this.defaultMaxOutputBytes;
     const startTime = Date.now();
 
