@@ -12,9 +12,11 @@ import {
   parseJsTsReferences,
   ModuleResolver,
 } from "@safetodelete/language-js-ts";
-import { discoverRepositoryFiles } from "./file-discovery.js";
+import { discoverRepositoryFiles, type DiscoverOptions } from "./file-discovery.js";
 
-export interface AnalyzerOptions {
+export type PackageManager = "npm" | "pnpm" | "yarn" | "bun";
+
+export interface AnalyzerOptions extends DiscoverOptions {
   repoRoot: string;
   commitSha?: string;
 }
@@ -45,21 +47,113 @@ export function detectGitCommit(repoRoot: string): { commitSha: string; isDirty:
   }
 }
 
-export function detectPackageManager(repoRoot: string): string | undefined {
-  if (fs.existsSync(path.join(repoRoot, "pnpm-lock.yaml"))) return "pnpm";
-  if (fs.existsSync(path.join(repoRoot, "package-lock.json"))) return "npm";
-  if (fs.existsSync(path.join(repoRoot, "yarn.lock"))) return "yarn";
-  if (fs.existsSync(path.join(repoRoot, "bun.lockb"))) return "bun";
+function parsePackageManagerField(pkgJsonPath: string): PackageManager | undefined {
+  if (!fs.existsSync(pkgJsonPath)) return undefined;
+  try {
+    const pkg = JSON.parse(fs.readFileSync(pkgJsonPath, "utf-8"));
+    if (typeof pkg.packageManager === "string") {
+      const name = pkg.packageManager.split("@")[0].trim().toLowerCase();
+      if (name === "pnpm" || name === "yarn" || name === "bun" || name === "npm") {
+        return name;
+      }
+    }
+  } catch {
+    // Ignore malformed package.json
+  }
   return undefined;
+}
+
+function detectLockfileInDir(dir: string): PackageManager | undefined {
+  if (fs.existsSync(path.join(dir, "pnpm-lock.yaml"))) return "pnpm";
+  if (fs.existsSync(path.join(dir, "yarn.lock"))) return "yarn";
+  if (fs.existsSync(path.join(dir, "bun.lockb")) || fs.existsSync(path.join(dir, "bun.lock"))) {
+    return "bun";
+  }
+  if (
+    fs.existsSync(path.join(dir, "package-lock.json")) ||
+    fs.existsSync(path.join(dir, "npm-shrinkwrap.json"))
+  ) {
+    return "npm";
+  }
+  return undefined;
+}
+
+export function detectPackageManager(repoRoot: string): PackageManager | undefined {
+  let currentDir = path.resolve(repoRoot);
+
+  while (true) {
+    const fromField = parsePackageManagerField(path.join(currentDir, "package.json"));
+    if (fromField) return fromField;
+
+    const fromLock = detectLockfileInDir(currentDir);
+    if (fromLock) return fromLock;
+
+    if (fs.existsSync(path.join(currentDir, ".git"))) {
+      break;
+    }
+
+    const parent = path.dirname(currentDir);
+    if (parent === currentDir) break;
+    currentDir = parent;
+  }
+
+  return undefined;
+}
+
+export function getPackageManagerScriptCommand(
+  packageManager: string | undefined,
+  scriptName: string
+): string {
+  const pm = (packageManager || "npm").toLowerCase();
+  if (pm === "pnpm") {
+    return scriptName === "test" ? "pnpm test" : `pnpm run ${scriptName}`;
+  }
+  if (pm === "yarn") {
+    return scriptName === "test" ? "yarn test" : `yarn run ${scriptName}`;
+  }
+  if (pm === "bun") {
+    return scriptName === "test" ? "bun test" : `bun run ${scriptName}`;
+  }
+  return scriptName === "test" ? "npm test" : `npm run ${scriptName}`;
+}
+
+export function resolveDefaultCheckCommands(
+  worktreePath: string,
+  detectedPackageManager?: string
+): string[] {
+  const commands: string[] = [];
+  const pkgPath = path.join(worktreePath, "package.json");
+  if (!fs.existsSync(pkgPath)) return commands;
+
+  try {
+    const pkg = JSON.parse(fs.readFileSync(pkgPath, "utf-8"));
+    const pm = detectedPackageManager || detectPackageManager(worktreePath) || "npm";
+
+    if (pkg.scripts?.test) {
+      commands.push(getPackageManagerScriptCommand(pm, "test"));
+    }
+    if (pkg.scripts?.build) {
+      commands.push(getPackageManagerScriptCommand(pm, "build"));
+    }
+  } catch {
+    // Ignore malformed package.json
+  }
+
+  return commands;
 }
 
 export class Analyzer {
   private repoRoot: string;
   private commitSha?: string;
+  private discoverOptions: DiscoverOptions;
 
   constructor(options: AnalyzerOptions) {
     this.repoRoot = path.resolve(options.repoRoot);
     this.commitSha = options.commitSha;
+    this.discoverOptions = {
+      respectGitignore: options.respectGitignore,
+      extraIgnorePatterns: options.extraIgnorePatterns,
+    };
   }
 
   public analyze(): { result: AnalysisResult; graph: DependencyGraph } {
@@ -67,7 +161,10 @@ export class Analyzer {
     const commitSha = this.commitSha || gitInfo.commitSha;
     const packageManager = detectPackageManager(this.repoRoot);
 
-    const { sourceFiles, configFiles } = discoverRepositoryFiles(this.repoRoot);
+    const { sourceFiles, configFiles } = discoverRepositoryFiles(
+      this.repoRoot,
+      this.discoverOptions
+    );
 
     const detectedLanguages = new Set<string>();
     for (const f of sourceFiles) {

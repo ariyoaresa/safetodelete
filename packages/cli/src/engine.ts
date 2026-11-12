@@ -1,6 +1,6 @@
 import fs from "node:fs";
 import path from "node:path";
-import { Analyzer } from "@safetodelete/analyzer";
+import { Analyzer, resolveDefaultCheckCommands } from "@safetodelete/analyzer";
 import { WorktreeManager } from "@safetodelete/simulator";
 import { SandboxRunner } from "@safetodelete/runner";
 import { RiskEvaluator } from "@safetodelete/risk-engine";
@@ -62,26 +62,17 @@ export async function executeSimulation(options: SimulationExecutionOptions): Pr
     // Apply deletion inside isolated worktree
     handle.applyDeletion(relTargets);
 
-    // 3. Determine verification commands
+    // 3. Determine verification commands (package-manager-aware)
     const commandsToRun: string[] = [];
     if (options.checkCommands && options.checkCommands.length > 0) {
       commandsToRun.push(...options.checkCommands);
     } else {
-      // Auto-detect scripts in package.json
-      const pkgPath = path.join(handle.worktreePath, "package.json");
-      if (fs.existsSync(pkgPath)) {
-        try {
-          const pkg = JSON.parse(fs.readFileSync(pkgPath, "utf-8"));
-          if (pkg.scripts?.test) {
-            commandsToRun.push("npm test");
-          }
-          if (pkg.scripts?.build) {
-            commandsToRun.push("npm run build");
-          }
-        } catch {
-          // Ignore
-        }
-      }
+      commandsToRun.push(
+        ...resolveDefaultCheckCommands(
+          handle.worktreePath,
+          analysisResult.repository.packageManager
+        )
+      );
     }
 
     // 4. Run Sandbox Checks
